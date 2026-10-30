@@ -1,0 +1,61 @@
+# Postcard Racers: graphics test (Sunshine Beach)
+
+A short test track for the VR kart racer. It checks three things before we build the real Noosa track:
+1. **Does it look good enough?** Photo textures, a real sky, shadows, see-through turquoise water.
+2. **Does it run smoothly in the headset?** Turn on Settings → Show FPS. You want 45+.
+3. **Does it make you feel sick?** Try both camera views at all three speeds.
+
+## What's in it
+- A ~1 km lap: asphalt esplanade with a start gantry, then down onto a packed-sand beach track beside the water, with a wooden jump and two boost pads.
+- Palm trees, ferns and shrubs, the Sunshine Beach surf club, beach umbrellas and red/yellow patrol flags.
+- A 3-lap race with a countdown, lap times and a saved best lap.
+- Dust behind the wheels, splashes in the shallows, boost flames, and generated engine and surf sounds.
+
+## Controls
+| | Joy-Cons | Phone (Play) | PC |
+|---|---|---|---|
+| Go | ZR / R / A | GO button | W / ↑ |
+| Brake / reverse | ZL / L / B | BRAKE button | S / ↓ |
+| Steer | stick | ◀ ▶ buttons | A / D |
+| Switch camera | X/Y (top face button) | Settings | C |
+| Re-centre view (VR) | + | two-finger tap | |
+| Race again (after finish) | − | ✕ Menu → Play | Enter |
+
+**VR without a controller:** hold a finger on the screen to go and tilt your head like a steering wheel. You can turn head-tilt steering off in Settings.
+
+The Joy-Con button numbers come from the fishing game. If a button does nothing, tell Claude which one.
+
+## Run it on the PC
+In this folder, run:
+```
+npx http-server -p 8080 -c-1
+```
+Then open http://localhost:8080.
+
+## Run it on the iPhone (needs https)
+1. Make a new GitHub repo called `postcard-racers` and upload everything in this folder (`index.html`, `README.md`, `js/`, `lib/`, `assets/`).
+2. In the repo, go to **Settings → Pages → Deploy from branch → main / root**.
+3. Open `https://tom-lee9.github.io/postcard-racers/` in Safari, then **Share → Add to Home Screen** and launch it from there.
+4. When you tap Play or VR Mode, tap **Allow** for motion access.
+5. If the phone shows an old version, check the "Version" number on the menu card.
+
+## Files
+- `index.html`: page, menu, settings
+- `js/main.js`: renderer, VR stereo view, cameras, controls, race and laps
+- `js/world.js`: track shape, terrain, sea shader, palms, plants, props
+- `js/kart.js`: kart model and driving physics
+- `js/effects.js`: dust and splash particles
+- `js/hud.js`: lap/time/speed panel (3D, so it works in VR)
+- `js/audio.js`: engine, surf and beep sounds
+- `js/vr.js`: phone orientation → head rotation
+- `lib/`: three.js r160 (MIT) + GLTFLoader, RGBELoader, BufferGeometryUtils
+
+## Asset credits
+- [Poly Haven](https://polyhaven.com) (CC0): textures `coast_sand_01`, `damp_beach_sand`, `asphalt_02`, `palm_bark`, `leafy_grass`; sky `kloofendal_48d_partly_cloudy_puresky`; models `fern_02`, `shrub_02`.
+- `waternormals.jpg` from the three.js examples (MIT).
+- Palm trees, kart, signs and buildings are built in code.
+
+## Honest limits
+- Poly Haven's palm models are 50–80 MB each, which is far too heavy for a phone, so the palms are built in code with real bark textures and drawn fronds.
+- The water reflects the sky but not the palms or karts. Proper reflections would mean drawing the whole scene again for each eye.
+- There's no lens distortion correction. If edges look bent, lower the VR field of view.

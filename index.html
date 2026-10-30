@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Postcard Racers</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, -apple-system, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; }
+  .panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-1.5deg); width: min(440px, 86vw); max-height: 86vh; overflow: auto; box-sizing: border-box;
+    background: #fdf6e3; color: #2b2b2b; border-radius: 4px; padding: 22px 26px; border: 10px solid #fff; box-shadow: 0 14px 40px rgba(0,0,0,.5); }
+  .panel h1 { margin: 0; font: 900 36px/1 'Trebuchet MS', system-ui; color: #e8532a; text-shadow: 2px 2px 0 #ffd23f; }
+  .stamp { position: absolute; right: 16px; top: 14px; width: 64px; height: 76px; border: 3px dotted #c44; background: #ffe8a3; display: grid; place-items: center;
+    font: 800 11px/1.15 system-ui; color: #c44; text-align: center; transform: rotate(6deg); }
+  .sub { margin: 6px 0 16px; font-style: italic; color: #6b5b3e; }
+  .panel button { display: block; width: 100%; margin: 8px 0; padding: 13px; font: 700 17px system-ui; border: 0; border-radius: 10px; background: #1b9aaa; color: #fff; cursor: pointer; }
+  .panel button:disabled { opacity: .45; }
+  #vr { background: #e8532a; }
+  label { display: block; margin: 10px 0; font-size: 15px; }
+  label.row input { width: 100%; }
+  select { font-size: 15px; margin-left: 6px; }
+  .note { font-size: 13px; color: #776; margin: 2px 0 8px; }
+  #status { font-size: 14px; color: #8a5a00; min-height: 1em; }
+  #ver { font-size: 11px; color: #aa9; text-align: right; margin: 4px 0 0; }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud button { pointer-events: auto; position: absolute; border: 0; color: #fff; font: 700 15px system-ui; border-radius: 10px; }
+  #exit, #mute { top: 10px; padding: 6px 14px; background: rgba(0,0,0,.45); }
+  #exit { left: calc(50% - 110px); } #mute { left: calc(50% + 20px); }
+  .pad { bottom: 22px; width: 86px; height: 86px; border-radius: 50% !important; font-size: 26px !important; background: rgba(255,255,255,.28); }
+  #left { left: 22px; } #right { left: 120px; } #gas { right: 22px; background: rgba(40,200,90,.6); } #brake { right: 120px; background: rgba(220,60,40,.55); font-size: 15px !important; }
+  body.vr .pad, body.vr #exit, body.vr #mute { opacity: .35; }
+  body.vr .pad { display: none; }
+  #fps { position: absolute; top: 10px; left: 10px; color: #fff; font: 12px monospace; text-shadow: 0 0 3px #000; }
+  #divider { display: none; position: fixed; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #000; }
+  body.vr #divider { display: block; }
+  #rotate { display: none; position: fixed; inset: 0; background: #111; color: #fff; font-size: 20px; place-items: center; text-align: center; padding: 30px; }
+  @media (orientation: portrait) { body.vr #rotate { display: grid; } }
+  #toast { position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%); max-width: 80vw; background: rgba(0,0,0,.65); color: #fff; padding: 10px 14px; border-radius: 10px;
+    font-size: 15px; opacity: 0; transition: opacity .4s; text-align: center; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/" } }
+</script>
+</head>
+<body>
+  <div id="menu" class="panel">
+    <div class="stamp">SUNSHINE<br>BEACH<br>QLD</div>
+    <h1>Postcard<br>Racers</h1>
+    <p class="sub">Graphics test: Sunshine Beach</p>
+    <button id="play" disabled>Play</button>
+    <button id="vr" disabled>VR Mode</button>
+    <button id="openSettings" disabled>Settings</button>
+    <p id="status"></p>
+    <p id="best" class="note"></p>
+    <p id="ver"></p>
+  </div>
+
+  <div id="settings" class="panel" hidden>
+    <h1>Settings</h1>
+    <label>Graphics quality
+      <select id="setQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+    </label>
+    <p class="note">Changing quality reloads the page.</p>
+    <label>Camera
+      <select id="setCam"><option value="cockpit">Cockpit (driver's seat)</option><option value="chase">Chase (behind the kart)</option></select>
+    </label>
+    <p class="note">Cockpit is usually easier on your stomach in VR.</p>
+    <label>Speed
+      <select id="setSpeedClass"><option value="22">Chill</option><option value="28">Normal</option><option value="34">Fast</option></select>
+    </label>
+    <label>Head-tilt steering in VR <input type="checkbox" id="setTilt"></label>
+    <p class="note">Only used when no controller stick is moving. Tilt your head like a steering wheel.</p>
+    <label>Mute sound <input type="checkbox" id="setMute"></label>
+    <label class="row">VR eye distance (IPD) <span id="setIpdVal"></span><input type="range" id="setIpd" min="50" max="75" step="1"></label>
+    <label class="row">VR field of view <span id="setFovVal"></span><input type="range" id="setFov" min="60" max="100" step="1"></label>
+    <label>Show FPS <input type="checkbox" id="setFps"></label>
+    <button id="back">Back</button>
+  </div>
+
+  <div id="hud" hidden>
+    <button id="exit">✕ Menu</button>
+    <button id="mute">🔊</button>
+    <button id="left" class="pad">◀</button>
+    <button id="right" class="pad">▶</button>
+    <button id="brake" class="pad">BRAKE</button>
+    <button id="gas" class="pad">GO</button>
+    <div id="fps"></div>
+  </div>
+  <div id="divider"></div>
+  <div id="rotate">Turn your phone sideways (landscape) for VR mode</div>
+  <div id="toast"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
