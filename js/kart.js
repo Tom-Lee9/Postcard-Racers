@@ -229,7 +229,7 @@ export class Kart {
     // wheels spin + front wheels steer + steering wheel turns
     for (const w of m.wheels) w.rotation.x -= spd / w.userData.r * dt;
     for (const s of m.steer) s.rotation.y = -this.steer * 0.42;
-    m.swSpin.rotation.z = this.steer * 1.6;
+    m.swSpin.rotation.z = -this.steer * 1.6;
     m.flames.visible = this.boost > 0;
     if (m.flames.visible) m.flames.children.forEach((f, i) => f.scale.set(1, 1, 0.75 + Math.random() * 0.6));
   }

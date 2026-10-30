@@ -5,12 +5,13 @@ import { Gyro } from './vr.js';
 import { Sound } from './audio.js';
 import { Hud } from './hud.js';
 import { Particles } from './effects.js';
+import { MicroBit } from './microbit.js';
 
 const $ = id => document.getElementById(id);
-const VERSION = 1;
+const VERSION = 2;
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-sunshine';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false }, (() => {
+const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 })());
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
@@ -46,6 +47,8 @@ const hud = new Hud(); rig.add(hud.mesh);
 
 const gyro = new Gyro();
 const sound = new Sound(S.muted);
+const mb = new MicroBit();
+mb.onChange = s => { $('mbStatus').textContent = s; toast(s, 3000); };
 let world = null, kart = null, model = null, dust = null, mode = 'menu';   // 'menu' | 'play' | 'vr'
 let yawOffset = 0, needCenter = true, lookYaw = 0, lookPitch = 0, drag = null, touchGas = false, frame = 0, clock = 0;
 const keys = {}, pads = { left: false, right: false, gas: false, brake: false };
@@ -89,7 +92,7 @@ function updateRace(dt) {
     const n = Math.ceil(race.t);
     if (n !== lastBeep && n <= 3 && n >= 1) { sound.beep(440); lastBeep = n; }
     if (race.t <= 3) race.msg = String(Math.max(1, n)), race.msgColor = '#ffd23f', race.msgT = 1, race.sub = '';
-    if (race.t <= 0) { race.state = 'racing'; say('GO!', 1, '', '#3fdc6a'); sound.beep(880, 0.4); }
+    if (race.t <= 0) { race.state = 'racing'; mb.send('go'); say('GO!', 1, '', '#3fdc6a'); sound.beep(880, 0.4); }
     return;
   }
   if (race.state === 'racing') {
@@ -103,6 +106,7 @@ function updateRace(dt) {
       const pb = !race.best || lt < race.best;
       if (AUTO) console.log('[race] lap ' + race.lap + ' ' + lt.toFixed(2) + ' s, track ' + Math.round(world.track.length) + ' m');
       if (pb) { race.best = lt; try { localStorage.setItem(BEST, lt.toFixed(3)); } catch (e) {} }
+      mb.send(race.lap > LAPS ? 'fin' : 'l' + race.lap);
       if (race.lap > LAPS) { race.state = 'done'; say('FINISH!', 1e9, 'Total ' + race.time.toFixed(2) + ' s' + (pb ? ' · new best lap!' : ''), '#ffd23f'); sound.beep(988, 0.6); }
       else { say(race.lap === LAPS ? 'FINAL LAP' : 'LAP ' + race.lap, 2, lt.toFixed(2) + ' s' + (pb ? ' · best!' : ''), pb ? '#3fdc6a' : '#fff'); sound.beep(660, 0.25); }
     }
@@ -125,6 +129,7 @@ async function start(vr) {
   needCenter = true; lookYaw = lookPitch = 0;
   const q = new URLSearchParams(location.search);              // testing: ?cam=chase&at=300
   if (q.get('cam')) S.cam = q.get('cam');
+  if (q.get('mb')) { mb.angle = +q.get('mb'); mb.t = Infinity; }   // testing: pretend the micro:bit is turned
   applyCam();
   resetRace();
   if (q.get('at')) { kart.reset(+q.get('at')); race.state = 'racing'; snapRig = true; }
@@ -161,6 +166,10 @@ $('setCam').value = S.cam;
 $('setCam').onchange = e => { S.cam = e.target.value; save(); applyCam(); };
 $('setSpeedClass').value = String(S.top);
 $('setSpeedClass').onchange = e => { S.top = +e.target.value; save(); if (kart) kart.top = S.top; };
+$('mbConnect').hidden = $('mbRow').hidden = !mb.supported;
+$('mbConnect').onclick = () => { $('mbStatus').textContent = 'Connecting…'; mb.connect(); };
+$('setFlip').checked = S.mbFlip;
+$('setFlip').onchange = e => { S.mbFlip = e.target.checked; save(); };
 $('setTilt').checked = S.tilt;
 $('setTilt').onchange = e => { S.tilt = e.target.checked; save(); };
 $('setMute').checked = S.muted;
@@ -168,7 +177,7 @@ $('setMute').onchange = e => setMuted(e.target.checked);
 $('setFps').checked = S.fps;
 $('setFps').onchange = e => { S.fps = e.target.checked; save(); $('fps').hidden = !S.fps; };
 $('fps').hidden = !S.fps;
-for (const [id, k, unit] of [['setIpd', 'ipd', ' mm'], ['setFov', 'fov', '°']]) {
+for (const [id, k, unit] of [['setIpd', 'ipd', ' mm'], ['setFov', 'fov', '°'], ['setLock', 'lock', '°']]) {
   const el = $(id), out = $(id + 'Val');
   el.value = S[k]; out.textContent = S[k] + unit;
   el.oninput = () => { S[k] = +el.value; out.textContent = el.value + unit; save(); };
@@ -232,7 +241,10 @@ function readInput() {
   }
   if (keys.KeyW || keys.ArrowUp || pads.gas || touchGas) r.throttle = 1;
   if (keys.KeyS || keys.ArrowDown || pads.brake) r.brake = 1;
-  if (!r.padSteer) {
+  if (mb.active) {
+    const a = (S.mbFlip ? -1 : 1) * mb.angle, dz = 3;
+    r.steer = Math.abs(a) < dz ? 0 : Math.max(-1, Math.min(1, (a - Math.sign(a) * dz) / (S.lock - dz)));
+  } else if (!r.padSteer) {
     let s = 0;
     if (keys.KeyA || keys.ArrowLeft || pads.left) s -= 1;
     if (keys.KeyD || keys.ArrowRight || pads.right) s += 1;
@@ -344,6 +356,7 @@ function loop() {
   updateEffects(dt);
   world.update(dt, clock, kart.pos);
   hud.mesh.visible = mode !== 'menu';
+  if (mode === 'menu' && mb.active && frame % 10 === 0) $('mbStatus').textContent = 'micro:bit connected · turned ' + Math.round(mb.angle) + '°';
   hud.draw({ lap: race.lap, laps: LAPS, time: race.time, kmh: Math.abs(kart.state.speed) * 3.6, best: race.best, last: race.lastLap, msg: race.msg, sub: race.sub, msgColor: race.msgColor });
   sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, shore: Math.abs(shoreX(kart.pos.z) - kart.pos.x) });
   render();
