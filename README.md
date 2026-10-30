@@ -21,6 +21,16 @@ A short test track for the VR kart racer. It checks three things before we build
 | Re-centre view (VR) | + | two-finger tap | |
 | Race again (after finish) | − | ✕ Menu → Play | Enter |
 
+## micro:bit steering wheel
+1. In MakeCode, start a new project, add the **bluetooth** extension and set **Project Settings → No Pairing Required**.
+2. Open the JavaScript tab, paste in `microbit-wheel.txt`, and download it to the micro:bit. It shows an **X** until it connects.
+3. Open the game in **Bluefy** and tap **Connect micro:bit wheel**. Pick your micro:bit (it may show up as a 5-letter name). Hold it straight while it connects.
+4. Hold it upright like a steering wheel: screen facing you, logo at the top. The menu shows how far it's turned.
+5. Press **A** on the micro:bit to reset "straight" any time.
+- Steers the wrong way? Settings → **Reverse micro:bit steering**.
+- Too twitchy or too slow? Settings → **micro:bit full lock** (how far you turn it for full steering).
+- The Joy-Cons still do go and brake. While the micro:bit is connected, it does the steering instead of the stick.
+
 **VR without a controller:** hold a finger on the screen to go and tilt your head like a steering wheel. You can turn head-tilt steering off in Settings.
 
 The Joy-Con button numbers come from the fishing game. If a button does nothing, tell Claude which one.
@@ -48,6 +58,8 @@ Then open http://localhost:8080.
 - `js/hud.js`: lap/time/speed panel (3D, so it works in VR)
 - `js/audio.js`: engine, surf and beep sounds
 - `js/vr.js`: phone orientation → head rotation
+- `js/microbit.js`: Bluetooth link to the micro:bit wheel
+- `microbit-wheel.txt`: the micro:bit program (paste into MakeCode)
 - `lib/`: three.js r160 (MIT) + GLTFLoader, RGBELoader, BufferGeometryUtils
 
 ## Asset credits

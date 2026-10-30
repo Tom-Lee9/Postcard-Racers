@@ -19,6 +19,7 @@
   .panel button { display: block; width: 100%; margin: 8px 0; padding: 13px; font: 700 17px system-ui; border: 0; border-radius: 10px; background: #1b9aaa; color: #fff; cursor: pointer; }
   .panel button:disabled { opacity: .45; }
   #vr { background: #e8532a; }
+  #mbConnect { background: #6b4fbb; }
   label { display: block; margin: 10px 0; font-size: 15px; }
   label.row input { width: 100%; }
   select { font-size: 15px; margin-left: 6px; }
@@ -54,6 +55,8 @@
     <p class="sub">Graphics test: Sunshine Beach</p>
     <button id="play" disabled>Play</button>
     <button id="vr" disabled>VR Mode</button>
+    <button id="mbConnect" hidden>Connect micro:bit wheel</button>
+    <p id="mbStatus" class="note"></p>
     <button id="openSettings" disabled>Settings</button>
     <p id="status"></p>
     <p id="best" class="note"></p>
@@ -73,6 +76,11 @@
     <label>Speed
       <select id="setSpeedClass"><option value="22">Chill</option><option value="28">Normal</option><option value="34">Fast</option></select>
     </label>
+    <div id="mbRow" hidden>
+    <label class="row">micro:bit full lock <span id="setLockVal"></span><input type="range" id="setLock" min="20" max="90" step="5"></label>
+    <p class="note">How far you turn the micro:bit for full steering. Smaller = twitchier.</p>
+    <label>Reverse micro:bit steering <input type="checkbox" id="setFlip"></label>
+    </div>
     <label>Head-tilt steering in VR <input type="checkbox" id="setTilt"></label>
     <p class="note">Only used when no controller stick is moving. Tilt your head like a steering wheel.</p>
     <label>Mute sound <input type="checkbox" id="setMute"></label>

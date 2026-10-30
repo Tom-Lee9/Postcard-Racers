@@ -1,0 +1,54 @@
+// Steering wheel for Postcard Racers (micro:bit V2).
+// Hold it upright like a steering wheel: screen facing you, logo at the top.
+// Needs: the "bluetooth" extension, and Project Settings -> "No Pairing Required".
+// Play the game in Bluefy and tap "Connect micro:bit wheel".
+//
+// micro:bit -> game: "s<angle>" about 25 times a second (degrees turned, + = right)
+// game -> micro:bit: "go" (race started), "l<lap>" (new lap), "fin" (finished)
+// Button A: straighten up (whatever angle you're holding now becomes "straight")
+
+bluetooth.startUartService()
+basic.showIcon(IconNames.No, 0)       // X = not connected yet
+
+let connected = false
+let zero = 0
+
+// Which way gravity pulls across the screen tells us how far the wheel is turned
+function rawAngle(): number {
+    let x = input.acceleration(Dimension.X)
+    let y = input.acceleration(Dimension.Y)
+    return Math.atan2(x, -y) * 180 / Math.PI
+}
+// Angle turned from "straight", always between -180 and 180
+function wheelAngle(): number {
+    let a = rawAngle() - zero
+    while (a > 180) a -= 360
+    while (a < -180) a += 360
+    return a
+}
+
+input.onButtonPressed(Button.A, function () {
+    zero = rawAngle()
+    basic.showIcon(IconNames.Yes, 0)
+})
+
+bluetooth.onBluetoothConnected(function () {
+    connected = true
+    zero = rawAngle()                  // hold it straight when you connect
+    basic.showIcon(IconNames.Yes, 0)
+})
+bluetooth.onBluetoothDisconnected(function () {
+    connected = false
+    basic.showIcon(IconNames.No, 0)
+})
+bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
+    let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
+    if (msg == "go") basic.showArrow(ArrowNames.North, 0)
+    else if (msg == "fin") basic.showIcon(IconNames.Happy, 0)
+    else if (msg.charAt(0) == "l") basic.showNumber(parseInt(msg.substr(1)), 0)
+})
+
+basic.forever(function () {
+    if (connected) bluetooth.uartWriteString("s" + Math.round(wheelAngle()) + "\n")
+    basic.pause(40)
+})
