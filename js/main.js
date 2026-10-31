@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, shoreX } from './world.js?v=4';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=4';
-import { Gyro } from './vr.js?v=4';
-import { Sound } from './audio.js?v=4';
-import { Hud } from './hud.js?v=4';
-import { Particles } from './effects.js?v=4';
-import { MicroBit } from './microbit.js?v=4';
+import { loadAssets, buildWorld, shoreX } from './world.js?v=5';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=5';
+import { Gyro } from './vr.js?v=5';
+import { Sound } from './audio.js?v=5';
+import { Hud } from './hud.js?v=5';
+import { Particles } from './effects.js?v=5';
+import { MicroBit } from './microbit.js?v=5';
 
 const $ = id => document.getElementById(id);
-const VERSION = 4;                                          // bump this AND every ?v= in imports + index.html together
+const VERSION = 5;                                          // bump this AND every ?v= in imports + index.html together
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-sunshine';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
@@ -371,15 +371,23 @@ function render() {
     renderer.render(scene, cam);
   }
 }
-// dynamic resolution: drop pixel ratio if the phone can't hold ~45 fps, raise it back when there's headroom
-let acc = 0, cnt = 0, last = performance.now();
+// dynamic resolution: drop pixel ratio if the phone can't hold ~45 fps, raise it back when there's headroom.
+// But only keep a drop if it actually helped: if the phone is held back by something else (Low Power Mode caps
+// at 30 fps, heat, Bluetooth), lowering the resolution just makes it blurry, so undo it and stop trying for a while.
+const minPR = Math.min(maxPR, 1);
+let acc = 0, cnt = 0, last = performance.now(), tried = null, holdT = 0;
+function setPR(v) { pr = v; renderer.setPixelRatio(pr); onResize(); }
 function perf(dt) {
   acc += dt; cnt++;
   if (acc < 2) return;
-  const avg = acc / cnt;
-  if (avg > 1 / 45 && pr > 0.6) { pr = Math.max(0.6, pr * 0.85); renderer.setPixelRatio(pr); onResize(); }
-  else if (avg < 1 / 57 && pr < maxPR) { pr = Math.min(maxPR, pr * 1.08); renderer.setPixelRatio(pr); onResize(); }
-  if (S.fps) $('fps').textContent = Math.round(1 / avg) + ' fps · ' + pr.toFixed(2) + 'x';
+  const fps = cnt / acc;
+  holdT = Math.max(0, holdT - acc);
+  if (tried) {                                                   // judge the last drop
+    if (fps < tried.fps * 1.08) { setPR(tried.pr); holdT = 30; }  // didn't help: put it back, don't drop again for 30 s
+    tried = null;
+  } else if (fps < 45 && pr > minPR && holdT === 0) { tried = { pr, fps }; setPR(Math.max(minPR, pr * 0.85)); }
+  else if (fps > 57 && pr < maxPR) setPR(Math.min(maxPR, pr * 1.08));
+  if (S.fps) $('fps').textContent = Math.round(fps) + ' fps · ' + pr.toFixed(2) + 'x' + (holdT ? ' (held)' : '');
   acc = cnt = 0;
 }
 function loop() {

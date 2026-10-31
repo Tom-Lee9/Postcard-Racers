@@ -1,6 +1,6 @@
 // The kart: model (body, wheels, driver) and arcade driving physics.
 import * as THREE from 'three';
-import { TRACK_Y } from './world.js?v=4';
+import { TRACK_Y } from './world.js?v=5';
 
 const paint = c => new THREE.MeshPhysicalMaterial({ color: c, metalness: 0.4, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
 const std = o => new THREE.MeshStandardMaterial(o);
@@ -221,8 +221,8 @@ export class Kart {
       vr *= Math.exp(-grip * dt);
       let yawRate;
       if (this.drift !== 0) {
-        // turning in (k = 1) = tight arc, neutral = medium, turning out (k = -1) = wide arc
-        const k = this.steer * this.drift, tight = 0.55 + 0.45 * k;
+        // turning in (k = 1) = tight arc, neutral = medium, turning out (k = -1) = almost straight (sliding sideways)
+        const k = this.steer * this.drift, tight = k >= 0 ? 0.55 + 0.45 * k : 0.04 + 0.51 * (1 + k) ** 1.6;
         yawRate = -this.drift * 2.0 * tight * Math.min(1, vf / 6);
         vr += -this.drift * vf * 0.25 * dt;                     // a little outward slide
         if (g.surf !== 'off' && g.surf !== 'water') this.charge += (k > 0.5 ? DRIFT.fast : DRIFT.slow) * dt;
