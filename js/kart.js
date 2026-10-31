@@ -1,6 +1,6 @@
 // The kart: model (body, wheels, driver) and arcade driving physics.
 import * as THREE from 'three';
-import { TRACK_Y } from './world.js';
+import { TRACK_Y } from './world.js?v=4';
 
 const paint = c => new THREE.MeshPhysicalMaterial({ color: c, metalness: 0.4, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
 const std = o => new THREE.MeshStandardMaterial(o);
@@ -137,12 +137,15 @@ const SURF = {                  // top-speed multiplier, grip (how fast sideways
 };
 const fwd = new THREE.Vector3(), right = new THREE.Vector3();
 
-// Drift: hop, hold the drift button, steer. Steering into the corner tightens the arc and charges 2.5x faster.
-// Charge units and rates follow the Mario Kart Wii/8 numbers (5/frame turned in, 2/frame otherwise, at 60 fps).
+// Drift: hop, hold the drift button, steer. Steering into the corner tightens the arc and charges faster.
+// Timings measured from Tom's own MK8 Deluxe clips (31/10/2026), counted from when the drift starts:
+//   fully in: blue 0.80 s, orange 1.63 s, purple 2.53 s · neutral or fully out: 2.44x slower (out = neutral)
+//   small sparks before blue at 0.46 s · purple boost lasted ~2.9 s (others scaled from Nintendo's ratios)
 export const DRIFT = {
-  fast: 300, slow: 120,                         // charge per second: turned in at least halfway / anything else
-  tiers: [270, 570, 870],                       // blue, orange, purple
-  boost: [0.62, 1.67, 2.63],                    // seconds of boost each tier gives
+  fast: 1, slow: 1 / 2.44,                      // charge per second: turned in at least halfway / anything else
+  pre: 0.46,                                    // little sparks start (before blue is ready)
+  tiers: [0.80, 1.63, 2.53],                    // blue, orange, purple
+  boost: [0.68, 1.84, 2.9],                     // seconds of boost each tier gives
   colors: [0x3aa8ff, 0xff8a1e, 0xc040ff],
   minSpeed: 8,                                  // m/s needed to start a drift
   angle: 0.32,                                  // how far the nose swings into the corner (radians)
@@ -155,7 +158,7 @@ export class Kart {
     this.yaw = 0; this.vy = 0; this.air = false; this.boost = 0; this.steer = 0;
     this.top = 28; this.idx = 0; this.lastGood = 0; this.respawnT = 0;
     this.pitch = 0; this.roll = 0; this.groundRate = 0; this.boostMul = 1; this.boostColor = null;
-    this.hop = false; this.drift = 0; this.charge = 0; this.tier = 0; this.visYaw = 0; this.driftWin = 0; this.prevDrift = false;
+    this.hop = false; this.drift = 0; this.charge = 0; this.tier = 0; this.visYaw = 0; this.dOff = 0; this.prevDrift = false;
     this.trickT = -1; this.tricked = false; this.cockpit = true;
     this.state = { surf: 'road', speed: 0, slip: 0, boosting: false, landed: 0, respawned: false, tier: 0, drifting: false, tierUp: 0, mt: 0, trick: false };
   }
@@ -195,14 +198,17 @@ export class Kart {
     this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
 
     // drift button: press = hop (on the ground) or trick (in the air off a jump); hold + steer = drift
-    const dHeld = !locked && !!inp.drift, dPress = dHeld && !this.prevDrift;
+    // a touch sensor can flicker for a moment: only count it as let go after 0.1 s off
+    const dRaw = !locked && !!inp.drift;
+    this.dOff = dRaw ? 0 : this.dOff + dt;
+    const dHeld = dRaw || (this.prevDrift && !locked && this.dOff < 0.1), dPress = dHeld && !this.prevDrift;
     this.prevDrift = dHeld;
-    if (dPress && !this.air && vf > 5) { this.air = true; this.hop = true; this.vy = 3.2; this.driftWin = 0; }
+    if (dPress && !this.air && vf > 5) { this.air = true; this.hop = true; this.vy = 3.2; }
     if ((dPress || (inp.trick && !locked)) && this.air && !this.hop && !this.tricked) { this.tricked = true; this.trickT = 0; st.trick = true; }
-    if (this.drift === 0 && dHeld && this.driftWin > 0 && !this.air && vf > DRIFT.minSpeed && Math.abs(this.steer) > 0.35) {
+    // still holding drift and on the ground: turn either way to start the drift (no need to be quick)
+    if (this.drift === 0 && dHeld && !this.air && vf > DRIFT.minSpeed && Math.abs(this.steer) > 0.25) {
       this.drift = Math.sign(this.steer); this.charge = 0; this.tier = 0;
     }
-    this.driftWin = Math.max(0, this.driftWin - dt);
     if (this.drift !== 0 && (!dHeld || vf < DRIFT.minSpeed * 0.6)) this.endDrift(!dHeld);
 
     if (!this.air) {
@@ -241,7 +247,6 @@ export class Kart {
       this.vy -= 22 * dt; this.pos.y += this.vy * dt;
       if (this.pos.y <= h) {
         st.landed = this.hop ? 0 : Math.min(1, -this.vy / 8); this.pos.y = h; this.air = false; this.vy = 0;
-        if (this.hop) this.driftWin = 0.3;                     // steer within 0.3 s of landing to start the drift
         if (this.tricked) { this.addBoost(0.9, 1.3, 0xffe14a); st.mt = -1; }
         this.hop = false; this.tricked = false; this.trickT = -1;
       }
@@ -260,7 +265,7 @@ export class Kart {
     const visTarget = this.drift * DRIFT.angle * (0.75 + 0.25 * this.steer * this.drift);
     this.visYaw += (visTarget - this.visYaw) * Math.min(1, dt * 6);
     st.speed = vf; st.slip = Math.abs(vr) + (this.drift ? 4 : 0); st.boosting = this.boost > 0; st.top = this.top;
-    st.tier = this.tier; st.drifting = this.drift !== 0;
+    st.tier = this.tier; st.drifting = this.drift !== 0; st.pre = this.drift !== 0 && this.tier === 0 && this.charge >= DRIFT.pre;
     this.sync(dt, thr);
   }
 

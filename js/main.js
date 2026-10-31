@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, shoreX } from './world.js';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js';
-import { Gyro } from './vr.js';
-import { Sound } from './audio.js';
-import { Hud } from './hud.js';
-import { Particles } from './effects.js';
-import { MicroBit } from './microbit.js';
+import { loadAssets, buildWorld, shoreX } from './world.js?v=4';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=4';
+import { Gyro } from './vr.js?v=4';
+import { Sound } from './audio.js?v=4';
+import { Hud } from './hud.js?v=4';
+import { Particles } from './effects.js?v=4';
+import { MicroBit } from './microbit.js?v=4';
 
 const $ = id => document.getElementById(id);
-const VERSION = 3;
+const VERSION = 4;                                          // bump this AND every ?v= in imports + index.html together
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-sunshine';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
@@ -23,6 +23,7 @@ const QUALITY = {
 const Q = QUALITY[S.quality] || QUALITY.medium;
 const LAPS = 3;
 const AUTO = new URLSearchParams(location.search).has('auto');
+let logoTaps = 0, logoWas = false;                            // counts logo touches on the menu, to test how reliable it is
 const SPARK = +new URLSearchParams(location.search).get('spark') || 0;      // testing: ?spark=1..3 shows drift sparks
 
 // ---------- renderer, cameras ----------
@@ -328,14 +329,21 @@ function updateEffects(dt) {
   }
   if (st.landed > 0.3) for (let k = 0; k < 14; k++) dust.emit(tmp.copy(kart.pos).add({ x: (Math.random() - 0.5) * 2, y: 0.2, z: (Math.random() - 0.5) * 2 }), tmp2.set((Math.random() - 0.5) * 6, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 6), sandC, 0.8, 1.2, 2);
   // drift sparks: blue, orange, purple. Off the back wheels, plus the front wheels in cockpit view so you can see them.
-  const tier = SPARK || st.tier;
-  if (tier > 0 && !kart.air) {
-    const c = sparkC.setHex(DRIFT.colors[tier - 1]), n = tier + 1, size = 0.14 + 0.1 * tier;
+  const tier = SPARK || st.tier, pre = !SPARK && st.pre;
+  if ((tier > 0 || pre) && !kart.air) {
+    // before blue is ready: a few tiny blue sparks; each tier after that: more and bigger
+    const c = sparkC.setHex(DRIFT.colors[Math.max(0, tier - 1)]), n = pre ? 1 : tier + 1, size = pre ? 0.08 : 0.14 + 0.1 * tier;
     const spots = S.cam === 'cockpit' ? [wheelL, wheelR, frontL, frontR] : [wheelL, wheelR];
     for (const w of spots) for (let k = 0; k < n; k++) {
       const p = model.root.localToWorld(tmp.copy(w));
       tmp2.set((Math.random() - 0.5) * 4 + Math.sign(w.x) * 2.5, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4).applyAxisAngle(Y, kart.yaw);
-      sparks.emit(p, tmp2, c, size, 0.2 + 0.08 * tier, -0.3);
+      sparks.emit(p, tmp2, c, size, pre ? 0.15 : 0.2 + 0.08 * tier, -0.3);
+    }
+  }
+  if (st.tierUp) {                                               // new colour reached: a big flash of sparks
+    const c = sparkC.setHex(DRIFT.colors[st.tierUp - 1]);
+    for (const w of [wheelL, wheelR]) for (let k = 0; k < 18; k++) {
+      sparks.emit(model.root.localToWorld(tmp.copy(w)), tmp2.set((Math.random() - 0.5) * 9, 1 + Math.random() * 5, (Math.random() - 0.5) * 9), c, 0.22, 0.35, 0.2);
     }
   }
   if (st.mt) {                                                   // boost burst when you let go
@@ -377,6 +385,7 @@ function perf(dt) {
 function loop() {
   const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000);
   last = now; frame++; clock += dt;
+  const logoNow = !!(mb.buttons & 4); if (logoNow && !logoWas) logoTaps++; logoWas = logoNow;
   const inp = mode === 'menu' ? { throttle: 0, brake: 0, steer: 0 } : readInput();
   if (mode !== 'menu') updateRace(dt);
   kart.update(dt, inp, mode === 'menu' || race.state === 'count');
@@ -389,7 +398,10 @@ function loop() {
   updateEffects(dt);
   world.update(dt, clock, kart.pos);
   hud.mesh.visible = mode !== 'menu';
-  if (mode === 'menu' && mb.active && frame % 10 === 0) $('mbStatus').textContent = 'micro:bit connected · turned ' + Math.round(mb.angle) + '°';
+  if (mode === 'menu' && mb.active && frame % 6 === 0) {        // live check of the wheel: angle and every button
+    const on = (bit, name) => (mb.buttons & bit ? '🟢' : '⚪') + ' ' + name;
+    $('mbStatus').textContent = 'micro:bit connected · turned ' + Math.round(mb.angle) + '° · ' + on(1, 'A') + '  ' + on(2, 'B') + '  ' + on(4, 'logo') + ' · logo touches: ' + logoTaps;
+  }
   hud.draw({ lap: race.lap, laps: LAPS, time: race.time, kmh: Math.abs(kart.state.speed) * 3.6, best: race.best, last: race.lastLap, msg: race.msg, sub: race.sub, msgColor: race.msgColor, tier: ks.tier, drifting: ks.drifting });
   sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, drifting: ks.drifting, shore: Math.abs(shoreX(kart.pos.z) - kart.pos.x) });
   render();
