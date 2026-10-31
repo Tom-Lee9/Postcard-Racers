@@ -1,11 +1,12 @@
 // micro:bit steering wheel over Bluetooth (same UART link as the fishing reel). Needs Bluefy on iPhone.
-// micro:bit -> game: "s<degrees>" about 25 times a second (+ = turned right)
+// micro:bit -> game: "s<degrees>,<buttons>" about 25 times a second (+ = turned right; buttons: 1 = A go, 2 = B brake,
+//   4 = logo drift), "t" = flicked upwards (trick), "z" = straightened (A+B pressed together twice)
 // game -> micro:bit: "go", "l<lap>", "fin"
 const UART = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 
 export class MicroBit {
   constructor() {
-    this.out = null; this.angle = 0; this.t = -1e9; this.buf = ''; this.queue = []; this.sending = false;
+    this.out = null; this.angle = 0; this.t = -1e9; this.buttons = 0; this.trick = false; this.buf = ''; this.queue = []; this.sending = false;
     this.status = ''; this.onChange = () => {};
   }
   get supported() { return !!navigator.bluetooth; }
@@ -39,7 +40,12 @@ export class MicroBit {
     while ((i = this.buf.indexOf('\n')) >= 0) {
       const line = this.buf.slice(0, i).trim();
       this.buf = this.buf.slice(i + 1);
-      if (line[0] === 's') { const a = parseFloat(line.slice(1)); if (!isNaN(a)) { this.angle = a; this.t = performance.now(); } }
+      if (line[0] === 's') {
+        const [a, b] = line.slice(1).split(',').map(Number);
+        if (!isNaN(a)) { this.angle = a; this.t = performance.now(); }
+        this.buttons = b || 0;                                     // old wheel programs send no buttons
+      } else if (line === 't') this.trick = true;                  // flicked upwards
+      else if (line === 'z') this.set('micro:bit wheel straightened');
     }
   }
   // one message at a time (Bluetooth gets upset if two writes overlap)

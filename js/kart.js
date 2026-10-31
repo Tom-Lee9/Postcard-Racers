@@ -128,7 +128,7 @@ export function buildKart(color = 0xe8322a, color2 = 0xf4f4f4, number = '7') {
   body.add(flames);
 
   body.traverse(o => { if (o.isMesh && o.material !== flameM && o.material !== coreM) { o.castShadow = true; o.receiveShadow = true; } });
-  return { root, body, wheels, steer, swSpin, driver, arms, flames };
+  return { root, body, wheels, steer, swSpin, driver, arms, flames, flameM };
 }
 
 // ---------- physics ----------
@@ -137,50 +137,97 @@ const SURF = {                  // top-speed multiplier, grip (how fast sideways
 };
 const fwd = new THREE.Vector3(), right = new THREE.Vector3();
 
+// Drift: hop, hold the drift button, steer. Steering into the corner tightens the arc and charges 2.5x faster.
+// Charge units and rates follow the Mario Kart Wii/8 numbers (5/frame turned in, 2/frame otherwise, at 60 fps).
+export const DRIFT = {
+  fast: 300, slow: 120,                         // charge per second: turned in at least halfway / anything else
+  tiers: [270, 570, 870],                       // blue, orange, purple
+  boost: [0.62, 1.67, 2.63],                    // seconds of boost each tier gives
+  colors: [0x3aa8ff, 0xff8a1e, 0xc040ff],
+  minSpeed: 8,                                  // m/s needed to start a drift
+  angle: 0.32,                                  // how far the nose swings into the corner (radians)
+};
+
 export class Kart {
   constructor(track, model) {
     this.track = track; this.m = model;
     this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.yaw = 0; this.vy = 0; this.air = false; this.boost = 0; this.steer = 0;
     this.top = 28; this.idx = 0; this.lastGood = 0; this.respawnT = 0;
-    this.pitch = 0; this.roll = 0; this.groundRate = 0;
-    this.state = { surf: 'road', speed: 0, slip: 0, boosting: false, landed: 0, respawned: false };
+    this.pitch = 0; this.roll = 0; this.groundRate = 0; this.boostMul = 1; this.boostColor = null;
+    this.hop = false; this.drift = 0; this.charge = 0; this.tier = 0; this.visYaw = 0; this.driftWin = 0; this.prevDrift = false;
+    this.trickT = -1; this.tricked = false; this.cockpit = true;
+    this.state = { surf: 'road', speed: 0, slip: 0, boosting: false, landed: 0, respawned: false, tier: 0, drifting: false, tierUp: 0, mt: 0, trick: false };
   }
   reset(i) {
     const t = this.track, N = t.N; i = (i + N) % N;
     const p = t.p[i], d = t.t[i];
     this.pos.set(p.x, TRACK_Y, p.y); this.yaw = Math.atan2(-d.x, -d.y);
     this.vel.set(0, 0, 0); this.vy = 0; this.air = false; this.boost = 0; this.idx = this.lastGood = i;
-    this.groundRate = 0;
+    this.groundRate = 0; this.hop = false; this.drift = 0; this.charge = 0; this.tier = 0; this.visYaw = 0; this.trickT = -1; this.tricked = false;
     this.sync(0);
   }
   forward(out) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
 
+  addBoost(secs, mul, color = null) {
+    this.boostMul = this.boost > 0 ? Math.max(this.boostMul, mul) : mul;
+    this.boost = Math.max(this.boost, secs); this.boostColor = color;
+  }
+  endDrift(fire) {
+    if (fire && this.tier > 0) { this.addBoost(DRIFT.boost[this.tier - 1], 1.32, DRIFT.colors[this.tier - 1]); this.state.mt = this.tier; }
+    this.drift = 0; this.charge = 0; this.tier = 0;
+  }
+
   update(dt, inp, locked) {
     const t = this.track, st = this.state;
-    st.landed = 0; st.respawned = false;
+    st.landed = 0; st.respawned = false; st.tierUp = 0; st.mt = 0; st.trick = false;
     const g = t.ground(this.pos.x, this.pos.z);
     this.idx = g.i; st.surf = g.surf;
     if (g.surf !== 'off' && g.surf !== 'water') this.lastGood = g.i;
-    if (g.boost) this.boost = 1.3;
+    if (g.boost && !this.air) this.addBoost(1.3, 1.45);
     this.boost = Math.max(0, this.boost - dt);
     const [mul, grip, drag] = SURF[g.surf];
-    const top = this.top * mul * (this.boost > 0 ? 1.45 : 1);
+    const top = this.top * mul * (this.boost > 0 ? this.boostMul : 1);
 
     this.forward(fwd); right.set(-fwd.z, 0, fwd.x);
     let vf = this.vel.dot(fwd), vr = this.vel.dot(right);
     const thr = locked ? 0 : inp.throttle, brk = locked ? 0 : inp.brake;
     this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
+
+    // drift button: press = hop (on the ground) or trick (in the air off a jump); hold + steer = drift
+    const dHeld = !locked && !!inp.drift, dPress = dHeld && !this.prevDrift;
+    this.prevDrift = dHeld;
+    if (dPress && !this.air && vf > 5) { this.air = true; this.hop = true; this.vy = 3.2; this.driftWin = 0; }
+    if ((dPress || (inp.trick && !locked)) && this.air && !this.hop && !this.tricked) { this.tricked = true; this.trickT = 0; st.trick = true; }
+    if (this.drift === 0 && dHeld && this.driftWin > 0 && !this.air && vf > DRIFT.minSpeed && Math.abs(this.steer) > 0.35) {
+      this.drift = Math.sign(this.steer); this.charge = 0; this.tier = 0;
+    }
+    this.driftWin = Math.max(0, this.driftWin - dt);
+    if (this.drift !== 0 && (!dHeld || vf < DRIFT.minSpeed * 0.6)) this.endDrift(!dHeld);
+
     if (!this.air) {
-      const accel = this.top * 0.55 + (this.boost > 0 ? 25 : 0);
+      const accel = this.top * 0.55 + (this.boost > 0 ? (this.boostMul - 1) * 55 : 0);
       if (this.boost > 0) vf += accel * dt * Math.max(0, 1 - vf / top);
       else if (thr > 0) vf += thr * accel * Math.max(0, 1 - Math.max(0, vf) / top) * dt;
       if (brk > 0) vf = vf > 0.5 ? vf - 30 * brk * dt : Math.max(vf - 9 * brk * dt, -7);
       if (thr === 0 && brk === 0) vf -= Math.sign(vf) * Math.min(Math.abs(vf), drag * dt);
       if (vf > top) vf += (top - vf) * Math.min(1, dt * 2.5);  // too fast for this surface: bleed off speed
       vr *= Math.exp(-grip * dt);
-      const yawRate = -this.steer * 2.1 * Math.max(-1, Math.min(1, vf / 6)) * (1 - 0.35 * Math.min(1, Math.abs(vf) / this.top));
+      let yawRate;
+      if (this.drift !== 0) {
+        // turning in (k = 1) = tight arc, neutral = medium, turning out (k = -1) = wide arc
+        const k = this.steer * this.drift, tight = 0.55 + 0.45 * k;
+        yawRate = -this.drift * 2.0 * tight * Math.min(1, vf / 6);
+        vr += -this.drift * vf * 0.25 * dt;                     // a little outward slide
+        if (g.surf !== 'off' && g.surf !== 'water') this.charge += (k > 0.5 ? DRIFT.fast : DRIFT.slow) * dt;
+        const tier = DRIFT.tiers.filter(x => this.charge >= x).length;
+        if (tier > this.tier) { this.tier = tier; st.tierUp = tier; }
+      } else {
+        yawRate = -this.steer * 2.1 * Math.max(-1, Math.min(1, vf / 6)) * (1 - 0.35 * Math.min(1, Math.abs(vf) / this.top));
+      }
       this.yaw += yawRate * dt;
+    } else if (this.hop) {
+      this.yaw += -this.steer * 1.2 * dt;                      // hops let you swing into the corner
     } else {
       this.yaw += -this.steer * 0.4 * dt;                      // a little air steering
     }
@@ -192,9 +239,14 @@ export class Kart {
     const h = t.ground(this.pos.x, this.pos.z).h;
     if (this.air) {
       this.vy -= 22 * dt; this.pos.y += this.vy * dt;
-      if (this.pos.y <= h) { st.landed = Math.min(1, -this.vy / 8); this.pos.y = h; this.air = false; this.vy = 0; }
+      if (this.pos.y <= h) {
+        st.landed = this.hop ? 0 : Math.min(1, -this.vy / 8); this.pos.y = h; this.air = false; this.vy = 0;
+        if (this.hop) this.driftWin = 0.3;                     // steer within 0.3 s of landing to start the drift
+        if (this.tricked) { this.addBoost(0.9, 1.3, 0xffe14a); st.mt = -1; }
+        this.hop = false; this.tricked = false; this.trickT = -1;
+      }
     } else if (h < this.pos.y - 0.3 && this.groundRate > 1) {
-      this.air = true; this.vy = this.groundRate;
+      this.air = true; this.hop = false; this.vy = this.groundRate;
     } else {
       this.groundRate = Math.max(-5, Math.min(12, (h - this.pos.y) / Math.max(dt, 1e-3)));
       this.pos.y = h;
@@ -204,14 +256,18 @@ export class Kart {
     if (h < -0.9 || Math.abs(this.pos.x) > 480 || Math.abs(this.pos.z) > 780) this.respawnT += dt; else this.respawnT = 0;
     if (this.respawnT > 0.8) { this.reset(this.lastGood); st.respawned = true; }
 
-    st.speed = vf; st.slip = Math.abs(vr); st.boosting = this.boost > 0; st.top = this.top;
+    if (this.trickT >= 0) this.trickT += dt;
+    const visTarget = this.drift * DRIFT.angle * (0.75 + 0.25 * this.steer * this.drift);
+    this.visYaw += (visTarget - this.visYaw) * Math.min(1, dt * 6);
+    st.speed = vf; st.slip = Math.abs(vr) + (this.drift ? 4 : 0); st.boosting = this.boost > 0; st.top = this.top;
+    st.tier = this.tier; st.drifting = this.drift !== 0;
     this.sync(dt, thr);
   }
 
   // move the model to match the physics
   sync(dt, thr = 0) {
     const m = this.m, t = this.track;
-    m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
+    m.root.position.copy(this.pos); m.root.rotation.y = this.yaw + this.visYaw;
     // tilt the body to the ground slope, lean in corners, squat when accelerating
     let tp = 0, tr = 0;
     if (!this.air && dt) {
@@ -224,13 +280,17 @@ export class Kart {
     tr += this.steer * Math.min(1, Math.abs(spd) / this.top) * 0.07;
     const k = dt ? Math.min(1, dt * 12) : 1;
     this.pitch += (tp - this.pitch) * k; this.roll += (tr - this.roll) * k;
-    m.body.rotation.set(this.pitch, 0, this.roll, 'YXZ');
+    // trick: barrel roll in chase view, a quick wiggle in cockpit view (spinning the cockpit around your head = queasy)
+    const tk = this.trickT >= 0 ? Math.min(1, this.trickT / 0.45) : 0;
+    const trick = tk ? (this.cockpit ? Math.sin(tk * Math.PI * 2) * 0.18 : (1 - (1 - tk) ** 3) * Math.PI * 2) : 0;
+    m.body.rotation.set(this.pitch, 0, this.roll + trick, 'YXZ');
     m.body.position.y = 0.012 * Math.sin(performance.now() * 0.03) * Math.min(1, Math.abs(spd) / 10) * (this.state.surf === 'road' ? 0.4 : 1.5);
     // wheels spin + front wheels steer + steering wheel turns
     for (const w of m.wheels) w.rotation.x -= spd / w.userData.r * dt;
     for (const s of m.steer) s.rotation.y = -this.steer * 0.42;
     m.swSpin.rotation.z = -this.steer * 1.6;
     m.flames.visible = this.boost > 0;
+    if (m.flameM) m.flameM.color.setHex(this.boostColor ?? 0xff8a2a);
     if (m.flames.visible) m.flames.children.forEach((f, i) => f.scale.set(1, 1, 0.75 + Math.random() * 0.6));
   }
 }

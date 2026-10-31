@@ -35,7 +35,7 @@ export class Sound {
     this.eng.gain.setTargetAtTime(0.07 + 0.09 * k.throttle + 0.04 * rpm, t, 0.1);
     const waves = 0.5 + 0.5 * Math.sin(t * 0.7) * Math.sin(t * 0.23);
     this.surf.gain.setTargetAtTime(0.05 + 0.4 * Math.max(0, 1 - k.shore / 90) * (0.4 + 0.6 * waves), t, 0.3);
-    this.slide.gain.setTargetAtTime(k.loose ? Math.min(0.25, Math.abs(k.speed) / 60 + k.slip / 20) : Math.min(0.15, k.slip / 25), t, 0.08);
+    this.slide.gain.setTargetAtTime(k.drifting ? 0.2 : k.loose ? Math.min(0.25, Math.abs(k.speed) / 60 + k.slip / 20) : Math.min(0.15, k.slip / 25), t, 0.08);
   }
   beep(freq, dur = 0.18) {
     if (!this.ctx) return;
@@ -43,6 +43,29 @@ export class Sound {
     o.type = 'square'; o.frequency.value = freq;
     g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  // drift tier reached: a rising two-note chirp, higher for each tier (4 = trick)
+  chirp(tier) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, base = [0, 660, 880, 1175, 990][tier] || 660;
+    for (const [dt, f] of [[0, base], [0.07, base * 1.5]]) {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + dt); g.gain.exponentialRampToValueAtTime(0.16, t + dt + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.12);
+      o.connect(g).connect(this.master); o.start(t + dt); o.stop(t + dt + 0.15);
+    }
+  }
+  // mini-turbo fired: a whoosh of filtered noise, longer and louder for bigger tiers
+  whoosh(tier) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, dur = 0.35 + 0.2 * tier;
+    const len = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(2500, t + dur);
+    const g = ctx.createGain(); g.gain.value = 0.12 + 0.06 * tier;
+    src.connect(f).connect(g).connect(this.master); src.start(t);
   }
   setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.7; }
 }

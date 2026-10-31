@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export class Particles {
-  constructor(scene, max = 260) {
+  constructor(scene, max = 260, glow = false) {          // glow = additive and bright (drift sparks)
     this.max = max; this.next = 0;
     this.pos = new Float32Array(max * 3); this.alpha = new Float32Array(max); this.size = new Float32Array(max); this.col = new Float32Array(max * 3);
     this.vel = new Float32Array(max * 3); this.life = new Float32Array(max); this.maxLife = new Float32Array(max).fill(1); this.grow = new Float32Array(max);
@@ -12,8 +12,8 @@ export class Particles {
     g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aColor', new THREE.BufferAttribute(this.col, 3));
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uScale: { value: 600 } },
-      transparent: true, depthWrite: false,
+      uniforms: { uScale: { value: 600 }, uGlow: { value: glow ? 1 : 0 } },
+      transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending,
       vertexShader: `
         attribute float aAlpha; attribute float aSize; attribute vec3 aColor;
         uniform float uScale; varying float vA; varying vec3 vC;
@@ -24,12 +24,14 @@ export class Particles {
           vA = aAlpha; vC = aColor;
         }`,
       fragmentShader: `
-        varying float vA; varying vec3 vC;
+        varying float vA; varying vec3 vC; uniform float uGlow;
         void main() {
           vec2 d = gl_PointCoord - 0.5;
-          float a = (1.0 - dot(d, d) * 4.0) * vA;
+          float r = dot(d, d) * 4.0, a = (1.0 - r) * vA;
           if (a <= 0.01) discard;
-          gl_FragColor = vec4(vC, a);
+          // sparks: white-hot centre fading to the tier colour
+          vec3 c = mix(vC, mix(vC * 1.6, vec3(1.0), 0.6 * (1.0 - r) * (1.0 - r) * (1.0 - r)), uGlow);
+          gl_FragColor = vec4(c, mix(a, a * 1.8, uGlow));
         }`,
     });
     this.points = new THREE.Points(g, this.mat);

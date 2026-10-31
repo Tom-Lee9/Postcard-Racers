@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadAssets, buildWorld, shoreX } from './world.js';
-import { buildKart, Kart, EYE } from './kart.js';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js';
 import { Gyro } from './vr.js';
 import { Sound } from './audio.js';
 import { Hud } from './hud.js';
@@ -8,7 +8,7 @@ import { Particles } from './effects.js';
 import { MicroBit } from './microbit.js';
 
 const $ = id => document.getElementById(id);
-const VERSION = 2;
+const VERSION = 3;
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-sunshine';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
@@ -23,6 +23,7 @@ const QUALITY = {
 const Q = QUALITY[S.quality] || QUALITY.medium;
 const LAPS = 3;
 const AUTO = new URLSearchParams(location.search).has('auto');
+const SPARK = +new URLSearchParams(location.search).get('spark') || 0;      // testing: ?spark=1..3 shows drift sparks
 
 // ---------- renderer, cameras ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -49,9 +50,9 @@ const gyro = new Gyro();
 const sound = new Sound(S.muted);
 const mb = new MicroBit();
 mb.onChange = s => { $('mbStatus').textContent = s; toast(s, 3000); };
-let world = null, kart = null, model = null, dust = null, mode = 'menu';   // 'menu' | 'play' | 'vr'
+let world = null, kart = null, model = null, dust = null, sparks = null, mode = 'menu';   // 'menu' | 'play' | 'vr'
 let yawOffset = 0, needCenter = true, lookYaw = 0, lookPitch = 0, drag = null, touchGas = false, frame = 0, clock = 0;
-const keys = {}, pads = { left: false, right: false, gas: false, brake: false };
+const keys = {}, pads = { left: false, right: false, gas: false, brake: false, drift: false };
 const qG = new THREE.Quaternion(), qYaw = new THREE.Quaternion(), eu = new THREE.Euler(), Y = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), fwd = new THREE.Vector3();
 const yawOf = q => eu.setFromQuaternion(q, 'YXZ').y;
@@ -67,7 +68,9 @@ loadAssets(renderer, f => { $('status').textContent = 'Loading… ' + Math.round
     scene.add(model.root);
     kart = new Kart(world.track, model);
     kart.top = S.top;
+    applyCam();
     dust = new Particles(scene);
+    sparks = new Particles(scene, 220, true);
     resetRace();
     const secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     $('status').textContent = secure ? '' : 'Heads up: phone motion sensors only work over https (e.g. GitHub Pages).';
@@ -134,8 +137,9 @@ async function start(vr) {
   resetRace();
   if (q.get('at')) { kart.reset(+q.get('at')); race.state = 'racing'; snapRig = true; }
   onResize();
-  toast(vr ? 'Joy-Cons: ZR/R = go, ZL/L = brake, stick = steer. No controller: hold the screen to go, tilt your head to steer.'
-    : mobile ? 'Use the buttons to drive.' : 'W/S or arrows to drive, A/D to steer. C = camera, R = back on track.');
+  toast(mb.active ? 'micro:bit: A = go, B = brake, touch the logo to drift. Flick it up off jumps for a trick.'
+    : vr ? 'Joy-Cons: ZR/R = go, ZL/L = brake, stick = steer. No controller: hold the screen to go, tilt your head to steer.'
+    : mobile ? 'Use the buttons to drive. Hold DRIFT and steer to drift.' : 'W/S or arrows to drive, A/D to steer, hold Space to drift. C = camera, R = back on track.');
   const ok = await perm;
   if (!ok && vr && mobile) toast('Motion access not granted, so head tracking is off. See README for how to reset it.', 7000);
 }
@@ -150,6 +154,7 @@ function applyCam() {
   hud.setMode(S.cam);
   if (!model) return;
   model.driver.visible = model.arms.visible = S.cam !== 'cockpit';
+  if (kart) kart.cockpit = S.cam === 'cockpit';
 }
 function setMuted(m) { S.muted = m; save(); sound.setMuted(m); $('mute').textContent = m ? '🔇' : '🔊'; $('setMute').checked = m; }
 function toggleCam() { S.cam = S.cam === 'cockpit' ? 'chase' : 'cockpit'; save(); applyCam(); $('setCam').value = S.cam; snapRig = true; }
@@ -222,12 +227,13 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 // Joy-Cons / any gamepad. Joy-Cons can show up as two separate pads, so read every pad.
 const prevBtn = {};
 function readInput() {
-  const r = { throttle: 0, brake: 0, steer: 0, padSteer: false };
+  const r = { throttle: 0, brake: 0, steer: 0, padSteer: false, drift: false, trick: false };
   for (const p of navigator.getGamepads ? navigator.getGamepads() : []) {
     if (!p) continue;
     const b = i => (p.buttons[i] ? (p.buttons[i].value || (p.buttons[i].pressed ? 1 : 0)) : 0);
     r.throttle = Math.max(r.throttle, b(7), b(5), b(0));
     r.brake = Math.max(r.brake, b(6), b(4), b(1));
+    if (b(2) > 0.5) r.drift = true;                             // X/Y side button: drift (tell Claude if it's the wrong one)
     for (let a = 0; a + 1 < p.axes.length; a += 2) { const x = p.axes[a]; if (Math.abs(x) > 0.15 && Math.abs(x) > Math.abs(r.steer)) { r.steer = x; r.padSteer = true; } }
     const edge = i => { const id = p.index + ':' + i, now = b(i) > 0.5, was = prevBtn[id]; prevBtn[id] = now; return now && !was; };
     if (edge(9)) needCenter = true;                              // + : re-centre the view
@@ -241,7 +247,12 @@ function readInput() {
   }
   if (keys.KeyW || keys.ArrowUp || pads.gas || touchGas) r.throttle = 1;
   if (keys.KeyS || keys.ArrowDown || pads.brake) r.brake = 1;
+  if (keys.Space || keys.ShiftLeft || keys.ShiftRight || pads.drift) r.drift = true;
   if (mb.active) {
+    if (mb.buttons & 1) r.throttle = 1;
+    if (mb.buttons & 2) r.brake = 1;
+    if (mb.buttons & 4) r.drift = true;
+    if (mb.trick) { r.trick = true; mb.trick = false; }
     const a = (S.mbFlip ? -1 : 1) * mb.angle, dz = 3;
     r.steer = Math.abs(a) < dz ? 0 : Math.max(-1, Math.min(1, (a - Math.sign(a) * dz) / (S.lock - dz)));
   } else if (!r.padSteer) {
@@ -269,7 +280,8 @@ addEventListener('orientationchange', () => setTimeout(onResize, 300));
 let snapRig = true, rigYaw = 0;
 function updateRig(dt) {
   if (S.cam === 'cockpit' || mode === 'menu') {
-    const e = tmp.copy(EYE).applyAxisAngle(Y, kart.yaw).add(kart.pos);
+    const ky = kart.yaw + kart.visYaw;                          // drifting swings the nose (and your view) into the corner
+    const e = tmp.copy(EYE).applyAxisAngle(Y, ky).add(kart.pos);
     if (mode === 'menu') {                                       // slow orbit around the kart on the menu
       const a = clock * 0.15;
       rig.position.set(kart.pos.x + Math.sin(a) * 7, kart.pos.y + 2.2, kart.pos.z + Math.cos(a) * 7);
@@ -279,7 +291,7 @@ function updateRig(dt) {
     }
     rig.position.x = e.x; rig.position.z = e.z;
     rig.position.y = snapRig ? e.y : rig.position.y + (e.y - rig.position.y) * Math.min(1, dt * 14);
-    rig.rotation.y = rigYaw = kart.yaw;
+    rig.rotation.y = rigYaw = ky;
   } else {
     kart.forward(fwd);
     tmp.copy(kart.pos).addScaledVector(fwd, -5.4); tmp.y += 2.3;
@@ -301,6 +313,7 @@ function updateRig(dt) {
 }
 const sandC = new THREE.Color(0.86, 0.76, 0.58), foamC = new THREE.Color(0.95, 0.98, 1);
 const wheelL = new THREE.Vector3(-0.84, 0.1, 0.8), wheelR = new THREE.Vector3(0.84, 0.1, 0.8);
+const frontL = new THREE.Vector3(-0.9, 0.1, -0.8), frontR = new THREE.Vector3(0.9, 0.1, -0.8), sparkC = new THREE.Color();
 function updateEffects(dt) {
   const st = kart.state, spd = Math.abs(st.speed);
   const rate = st.surf === 'off' ? 1 : st.surf === 'sand' ? 0.45 : st.surf === 'water' ? 1 : st.slip > 3 ? 0.4 : 0;
@@ -314,7 +327,23 @@ function updateEffects(dt) {
     }
   }
   if (st.landed > 0.3) for (let k = 0; k < 14; k++) dust.emit(tmp.copy(kart.pos).add({ x: (Math.random() - 0.5) * 2, y: 0.2, z: (Math.random() - 0.5) * 2 }), tmp2.set((Math.random() - 0.5) * 6, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 6), sandC, 0.8, 1.2, 2);
+  // drift sparks: blue, orange, purple. Off the back wheels, plus the front wheels in cockpit view so you can see them.
+  const tier = SPARK || st.tier;
+  if (tier > 0 && !kart.air) {
+    const c = sparkC.setHex(DRIFT.colors[tier - 1]), n = tier + 1, size = 0.14 + 0.1 * tier;
+    const spots = S.cam === 'cockpit' ? [wheelL, wheelR, frontL, frontR] : [wheelL, wheelR];
+    for (const w of spots) for (let k = 0; k < n; k++) {
+      const p = model.root.localToWorld(tmp.copy(w));
+      tmp2.set((Math.random() - 0.5) * 4 + Math.sign(w.x) * 2.5, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4).applyAxisAngle(Y, kart.yaw);
+      sparks.emit(p, tmp2, c, size, 0.2 + 0.08 * tier, -0.3);
+    }
+  }
+  if (st.mt) {                                                   // boost burst when you let go
+    const c = sparkC.setHex(st.mt > 0 ? DRIFT.colors[st.mt - 1] : 0xffe14a);
+    for (let k = 0; k < 24; k++) sparks.emit(model.root.localToWorld(tmp.set((Math.random() - 0.5) * 0.4, 0.5, 1.3)), tmp2.set((Math.random() - 0.5) * 5, Math.random() * 3, (Math.random() - 0.5) * 5), c, 0.2, 0.4, 0.3);
+  }
   dust.update(dt);
+  sparks.update(dt);
 }
 function render() {
   const w = innerWidth, h = innerHeight;
@@ -351,14 +380,18 @@ function loop() {
   const inp = mode === 'menu' ? { throttle: 0, brake: 0, steer: 0 } : readInput();
   if (mode !== 'menu') updateRace(dt);
   kart.update(dt, inp, mode === 'menu' || race.state === 'count');
+  const ks = kart.state;
+  if (ks.tierUp) sound.chirp(ks.tierUp);
+  if (ks.mt) sound.whoosh(ks.mt > 0 ? ks.mt : 1);
+  if (ks.trick) sound.chirp(4);
   if (kart.state.respawned) snapRig = true;
   updateRig(dt);
   updateEffects(dt);
   world.update(dt, clock, kart.pos);
   hud.mesh.visible = mode !== 'menu';
   if (mode === 'menu' && mb.active && frame % 10 === 0) $('mbStatus').textContent = 'micro:bit connected · turned ' + Math.round(mb.angle) + '°';
-  hud.draw({ lap: race.lap, laps: LAPS, time: race.time, kmh: Math.abs(kart.state.speed) * 3.6, best: race.best, last: race.lastLap, msg: race.msg, sub: race.sub, msgColor: race.msgColor });
-  sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, shore: Math.abs(shoreX(kart.pos.z) - kart.pos.x) });
+  hud.draw({ lap: race.lap, laps: LAPS, time: race.time, kmh: Math.abs(kart.state.speed) * 3.6, best: race.best, last: race.lastLap, msg: race.msg, sub: race.sub, msgColor: race.msgColor, tier: ks.tier, drifting: ks.drifting });
+  sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, drifting: ks.drifting, shore: Math.abs(shoreX(kart.pos.z) - kart.pos.x) });
   render();
   perf(dt);
 }
