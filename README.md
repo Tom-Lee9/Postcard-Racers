@@ -1,4 +1,4 @@
-# Postcard Racers: graphics test (Sunshine Beach)
+# Postcard Racers: Noosa
 
 A short test track for the VR kart racer. It checks three things before we build the real Noosa track:
 1. **Does it look good enough?** Photo textures, a real sky, shadows, see-through turquoise water.
@@ -10,6 +10,10 @@ A short test track for the VR kart racer. It checks three things before we build
 - Palm trees, ferns and shrubs, the Sunshine Beach surf club, beach umbrellas and red/yellow patrol flags.
 - A 3-lap race with a countdown, lap times and a saved best lap.
 - Dust behind the wheels, splashes in the shallows, boost flames, and generated engine and surf sounds.
+
+## The Noosa lap (about 1.5 km, from Tom's My Maps route at 1/6 scale)
+Sunshine Beach surf club start → dive underwater along the coast → boost up Lions Rock → launch over the gap onto a road of clouds above the national park → slide down into Noosa Heads (boosts + ramps) → Noosa Junction roundabout (tight inside, or boost pads on the outside) → bush trail (log jumps, creek splash, koala signs) → up the hill and jump over the rooftops → down to the beach and the finish.
+Miss a jump and you're put back down just past the gap, already moving.
 
 ## Controls
 | | Joy-Cons | Phone (Play) | PC |

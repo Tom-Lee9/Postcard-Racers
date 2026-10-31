@@ -51,9 +51,9 @@
 </head>
 <body>
   <div id="menu" class="panel">
-    <div class="stamp">SUNSHINE<br>BEACH<br>QLD</div>
+    <div class="stamp">NOOSA<br>QLD<br>4567</div>
     <h1>Postcard<br>Racers</h1>
-    <p class="sub">Graphics test: Sunshine Beach</p>
+    <p class="sub">Noosa: beach, sea, sky and bush</p>
     <button id="play" disabled>Play</button>
     <button id="vr" disabled>VR Mode</button>
     <button id="mbConnect" hidden>Connect micro:bit wheel</button>
@@ -88,6 +88,8 @@
     <label class="row">VR eye distance (IPD) <span id="setIpdVal"></span><input type="range" id="setIpd" min="50" max="75" step="1"></label>
     <label class="row">VR field of view <span id="setFovVal"></span><input type="range" id="setFov" min="60" max="100" step="1"></label>
     <label>Show FPS <input type="checkbox" id="setFps"></label>
+    <button id="bench">Run speed test</button>
+    <p id="benchResult" class="note">Takes about 20 seconds. Tell Claude the numbers it shows here.</p>
     <button id="back">Back</button>
   </div>
 
@@ -105,6 +107,6 @@
   <div id="rotate">Turn your phone sideways (landscape) for VR mode</div>
   <div id="toast"></div>
 
-  <script type="module" src="js/main.js?v=5"></script>
+  <script type="module" src="js/main.js?v=7"></script>
 </body>
 </html>
