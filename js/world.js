@@ -61,6 +61,7 @@ function natural(x, z) {
   const inland = ss(-40, -160, d);
   h += inland * (3 + 7 * (fbm(x * 0.004 + 7, z * 0.004) + 0.5));                      // rolling suburbs
   h += inland * bil(MAP.hill, x, z) * (6 + 20 * (fbm(x * 0.006 + 3, z * 0.006 + 9) + 0.5));   // national park hills (under the clouds)
+  h += 20 * ss(180, 30, Math.hypot(x + 1160, z + 700));                               // Noosa Hill (Noosa Drive goes over it)
   return h;
 }
 // track surfaces that don't flatten the ground around them
@@ -78,14 +79,16 @@ const CTRL = [
   [60, -800, 52, 'cloud', 16], [-30, -815, 58, 'cloud', 16], [-120, -860, 62, 'cloud', 16], [-190, -930, 64, 'cloud', 16],
   [-280, -960, 64, 'cloud', 16], [-370, -1010, 62, 'cloud', 16], [-450, -1080, 60, 'cloud', 16], [-530, -1130, 55, 'cloud', 16],
   [-610, -1190, 40, 'cloud', 15], [-680, -1250, 18, 'cloud', 14],                                                          // slide down to Noosa Heads
-  [-741, -1284, null, 'road', 10], [-825, -1212, null, 'road', 10], [-915, -1110, null, 'road', 10],                        // Noosa Heads: boosts + ramps
-  [-1008, -996, null, 'road', 10], [-1074, -990, null, 'road', 10], [-1080, -909, null, 'road', 10], [-1158, -807, null, 'road', 10],
-  [-1173, -640, null, 'road', 10], [-1170, -492, null, 'road', 10], [-978, -327, null, 'road', 10], [-885, -303, null, 'road', 11],
-  [-729, -312, null, 'road', 22],                                                                                            // Noosa Junction roundabout
+  [-746, -1277, null, 'road', 10], [-777, -1260, null, 'road', 10], [-787, -1224, null, 'road', 10], [-792, -1189, null, 'road', 10], [-824, -1158, null, 'road', 10], [-851, -1136, null, 'road', 10], [-886, -1125, null, 'road', 10], [-918, -1115, null, 'road', 10], [-935, -1081, null, 'road', 10],   // Park Road
+  [-958, -1054, null, 'road', 8, 'hastings'], [-989, -1018, null, 'road', 8, 'hastings'], [-1010, -990, null, 'road', 8, 'hastings'], [-1056, -993, null, 'road', 8, 'hastings'], [-1082, -992, null, 'road', 8, 'hastings'],   // Hastings Street
+  [-1079, -958, null, 'road', 10, 'deus'], [-1075, -925, null, 'road', 10], [-1083, -890, null, 'road', 10], [-1105, -853, null, 'road', 10], [-1149, -818, null, 'road', 10], [-1166, -785, null, 'road', 10], [-1164, -718, null, 'road', 10], [-1162, -686, null, 'road', 10], [-1158, -654, null, 'road', 10], [-1156, -604, null, 'road', 10], [-1155, -563, null, 'road', 10], [-1161, -528, null, 'road', 10],   // Noosa Drive, over the hill
+  [-1172, -498, null, 'road', 10, 'junction'], [-1154, -468, null, 'road', 10, 'junction'], [-1127, -438, null, 'road', 10, 'junction'], [-1098, -404, null, 'road', 10, 'junction'], [-1075, -379, null, 'road', 10, 'junction'],   // Noosa Junction: turn left
+  [-1035, -361, null, 'road', 11], [-1004, -341, null, 'road', 11], [-979, -321, null, 'road', 11], [-953, -316, null, 'road', 11], [-911, -305, null, 'road', 11], [-836, -309, null, 'road', 11], [-764, -314, null, 'road', 11],   // Sunshine Beach Road
+  [-729, -312, null, 'road', 22],                                                                                            // roundabout
   [-615, -258, null, 'road', 11], [-528, -204, null, 'dirt', 10], [-480, -225, null, 'dirt', 10],                          // bush trail
   [-393, -228, null, 'creek', 10], [-336, -216, null, 'dirt', 10], [-264, -201, null, 'dirt', 10],
-  [-222, -206, null, 'road', 10], [-185, -160, 16, 'road', 10], [-162, -122, 18, 'road', 10],                              // up the hill...
-  [-150, -100, 16, 'gap', 10], [-135, -72, 13, 'gap', 10],                                                                   // ...jump over the rooftops
+  [-222, -206, null, 'road', 10], [-185, -160, 16, 'road', 10], [-162, -122, 18, 'road', 10],                              // up the hill
+  [-150, -100, 15, 'road', 10], [-135, -72, 12, 'road', 10],                                                                 // ...and down it
   [-120, -42, 8, 'road', 10], [-100, -2, 5, 'road', 10], [-81, 30, 3, 'road', 10], [-57, 40, 1.4, 'sand', 10], [-10, 70, 0.6, 'sand', 10],   // down to the beach + finish
 ];
 
@@ -96,14 +99,14 @@ export class Track {
     const N = this.N = Math.round(this.length / 1.5);
     const pts = curve.getSpacedPoints(N);
     this.ds = this.length / N;
-    this.p = []; this.t = []; this.r = []; this.surf = []; this.curv = []; this.dist = []; this.th = []; this.w = [];
+    this.p = []; this.t = []; this.r = []; this.surf = []; this.curv = []; this.dist = []; this.th = []; this.w = []; this.zone = [];
     for (let i = 0; i < N; i++) { this.p.push(new THREE.Vector2(pts[i].x, pts[i].z)); this.th.push(pts[i].y); }
     // surface + width from the nearest control point (width smoothed so the roundabout opens out gradually)
     const raw = [];
     for (let i = 0; i < N; i++) {
       let best = 1e18, c = CTRL[0];
       for (const k of CTRL) { const d = (k[0] - this.p[i].x) ** 2 + (k[1] - this.p[i].y) ** 2; if (d < best) { best = d; c = k; } }
-      this.surf.push(c[3]); raw.push(c[4]);
+      this.surf.push(c[3]); raw.push(c[4]); this.zone.push(c[5] || '');
     }
     for (let i = 0; i < N; i++) { let s = 0; for (let k = -15; k <= 15; k++) s += raw[(i + k + N) % N]; this.w.push(s / 31); }
     for (let i = 0; i < N; i++) {
@@ -127,8 +130,6 @@ export class Track {
     this.ramps = [
       f(135, -570, 8, 3, 8, 0, 'launch'),                     // blue launch off Lions Rock
       f(-870, -1152, 9, 1.5, 3.5, -4), f(-966, -1040, 9, 1.5, 3.5, 4),                  // Noosa Heads
-      f(-510, -213, 2.4, 0.5, 10, 0, 'log'), f(-450, -231, 2.4, 0.5, 10, 0, 'log'), f(-300, -208, 2.4, 0.5, 10, 0, 'log'),  // bush logs
-      f(-168, -133, 8, 1.6, 8, 0, 'launch'),                  // rooftop jump
     ];
     this.boosts = [
       f(99, -492, 6, 0, 3, -3), f(117, -515, 6, 0, 3, 3), f(129, -548, 5, 0, 3, 0),     // up the rock + stairs
@@ -137,7 +138,7 @@ export class Track {
       f(-560, -228, 7, 0, 2.5, 0),
     ];
     // launch ramps kick you up (vy) and forward (vf) this fast, in m/s, so every speed class makes the jump
-    Object.assign(this.ramps[0], { vy: 16, vf: 34 }); Object.assign(this.ramps[6], { vy: 9, vf: 28 });
+    Object.assign(this.ramps[0], { vy: 16, vf: 34 });
     this.island = { x: -729, z: -312, r: 10 };               // roundabout island (grass, slows you down)
     this.surfClub = { x: -40, z: -18 };
     this._n = { i: 0, lat: 0, d: 0 };
@@ -168,12 +169,14 @@ export class Track {
     }
     const p = this.p[bi], r = this.r[bi];
     out.i = bi; out.lat = (x - p.x) * r.x + (z - p.y) * r.y; out.d = Math.abs(out.lat);
+    const t = this.t[bi], N = this.N, along = (x - p.x) * t.x + (z - p.y) * t.y;
+    out.th = this.th[bi] + along * (this.th[(bi + 1) % N] - this.th[(bi - 1 + N) % N]) / (2 * this.ds);   // height blended between samples
     return out;
   }
   // natural ground, flattened to the track's height near it
   groundH(x, z, n) {
     if (n.i < 0 || FLOATING[this.surf[n.i]]) return natural(x, z);
-    const base = this.th[n.i] - 0.05, w = this.w[n.i];
+    const base = n.th - 0.05, w = this.w[n.i];
     return base + (natural(x, z) - base) * ss(w + 1.5, w + 11, n.d);
   }
   // local frame of a feature (ramp / boost pad): along = metres forward from its start, lat = sideways
@@ -184,11 +187,11 @@ export class Track {
   // everything the kart needs to know about the ground under a point
   ground(x, z, out = this._g) {
     const n = this.nearest(x, z), s = this.surf[n.i], on = n.d < this.w[n.i];
-    let h = s === 'cloud' && on ? this.th[n.i] : this.groundH(x, z, n);
+    let h = s === 'cloud' && on ? n.th : this.groundH(x, z, n);
     out.ramp = false; out.launch = 0;
     for (const R of this.ramps) {
       const [ra, rl] = this.local(R, x, z);
-      if (ra > 0 && ra < R.len && Math.abs(rl) < R.halfW) { out.ramp = true; out.launch = R.vy || 0; out.launchV = R.vf || 0; h = this.th[n.i] + R.h * ra / R.len; }
+      if (ra > 0 && ra < R.len && Math.abs(rl) < R.halfW) { out.ramp = true; out.launch = R.vy || 0; out.launchV = R.vf || 0; h = n.th + R.h * ra / R.len; }
     }
     out.boost = false;
     for (const b of this.boosts) { const [a, l] = this.local(b, x, z); if (a > 0 && a < b.len && Math.abs(l) < b.halfW) out.boost = true; }
@@ -346,6 +349,7 @@ export function buildWorld(scene, renderer, A, Q) {
   buildCity(scene, track, A, Q);
   buildGums(scene, track, Q);
   buildBarriers(scene, track);
+  buildStreets(scene, track, Q);
   buildPalms(scene, track, A, Q);
   buildPlants(scene, track, A, Q);
 
@@ -388,11 +392,11 @@ function buildTerrain(track, A, Q) {
     mix[v * 2] = grass;
     // real land cover: national park = dark bush floor, suburbs + parks = grass, beaches = sand, rock = sandstone
     const c = coverAt(x, z);
-    if (c === CO.beach || dShore > -10) grass *= 0.0; else if (c === CO.rock) grass *= 0.15; else if (dShore < -35) grass = Math.max(grass, ss(-35, -60, dShore));
+    if (c === CO.beach || dShore > -10) grass *= 0.0; else if (c === CO.rock) grass *= 0.15; else if (c === CO.forest) grass = Math.max(grass, 0.95 * ss(-12, -30, dShore)); else if (dShore < -35) grass = Math.max(grass, ss(-35, -60, dShore));
     mix[v * 2] = grass;
     mix[v * 2 + 1] = ss(-9, 0.5, dShore);                       // wet sand near and under the water
     const b = 0.88 + 0.18 * fbm(x * 0.03, z * 0.03, 3);        // big soft light/dark patches so tiling doesn't show
-    const t = c === CO.forest ? [0.62, 0.72, 0.5] : c === CO.rock ? [0.85, 0.72, 0.58] : c === CO.grass ? [0.95, 1.05, 0.85] : [1, 1, 0.97];
+    const t = c === CO.forest ? [0.36, 0.52, 0.26] : c === CO.rock ? [0.85, 0.72, 0.58] : grass > 0.5 ? [0.66, 0.86, 0.5] : [1, 1, 0.97];   // strong greens: the grass texture washes out to beige in bright sun
     col[v * 3] = b * t[0]; col[v * 3 + 1] = b * t[1]; col[v * 3 + 2] = b * t[2];
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -511,7 +515,7 @@ function buildTrackSurface(scene, track, A) {
   });
   { const g = cloudT.image.getContext('2d'); g.fillStyle = '#ffcf40'; g.fillRect(60, 8, 8, 52); cloudT.needsUpdate = true; }   // gold dashed centre line
   cloudT.wrapS = cloudT.wrapT = THREE.RepeatWrapping;
-  const cloud = std({ map: cloudT, color: 0xa9b6ca, roughness: 1 });     // darker than the puffs so the road reads
+  const cloud = std({ map: cloudT, color: 0xc4cfde, roughness: 1, transparent: true, opacity: 0.38, depthWrite: false });   // mostly see-through: the national park shows below
   const creek = off(std({ color: 0x3f93b5, roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.82 }), 3);
   const white = off(std({ color: 0xf0f0ee, roughness: 0.6 }), 4);
   const kerbT = stripeTex('#d42a1e', '#f4f4f4'); kerbT.wrapT = THREE.RepeatWrapping;
@@ -597,7 +601,7 @@ function buildProps(scene, track) {
   const postT = stripeTex('#d42a1e', '#f4f4f4', 4);
   const postGeo = new THREE.CylinderGeometry(0.09, 0.11, 1.2, 8).translate(0, 0.6, 0);
   const postSpots = [];
-  for (let i = 0; i < track.N; i += 5) if (track.surf[i] === 'sand' || track.surf[i] === 'dirt')
+  for (let i = 0; i < 0; i += 5)
     for (const s of [-1, 1]) postSpots.push(track.place(new THREE.Object3D(), i, s * (track.w[i] + 1.7), track.th[i] - 0.05).position.clone());
   const posts = new THREE.InstancedMesh(postGeo, std({ map: postT, roughness: 0.6 }), postSpots.length);
   postSpots.forEach((p, k) => posts.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)));
@@ -800,10 +804,9 @@ function buildNoosaProps(scene, track) {
   for (let i = 0; i < track.N; i++) {
     if (track.surf[i] !== 'cloud') continue;
     if (i % 3 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(0.5, 2.5)), track.th[i] - rr(0.3, 1)), rr(2, 3.6));
-    if (i % 3 === 0) { const r = rr(5, 9); puff(spot(i, rr(-track.w[i], track.w[i]), track.th[i] - 1.2 - r * 0.5 - rr(0, 2)), r, 0.5); }   // keep their tops under the road
-    if (i % 7 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(8, 30)), track.th[i] + rr(-6, 4)), rr(6, 12), 0.6);
+    if (i % 7 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(8, 30)), track.th[i] - rr(9, 16)), rr(6, 12), 0.6);   // below the road, so you look out over them
   }
-  instanced(new THREE.IcosahedronGeometry(1, 2), std({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2 }), puffs, false);
+  instanced(new THREE.IcosahedronGeometry(1, 2), std({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2, transparent: true, opacity: 0.6, depthWrite: false }), puffs, false);
 
   // Noosa Junction roundabout island: grass mound, flower bed and a sign
   const I = track.island;
@@ -811,7 +814,7 @@ function buildNoosaProps(scene, track) {
   isl.add(new THREE.Mesh(new THREE.CylinderGeometry(I.r - 0.3, I.r + 0.3, 0.5, 32), std({ color: 0x4f8f3a, roughness: 0.9 })).translateY(0.2));
   isl.add(new THREE.Mesh(new THREE.TorusGeometry(I.r - 0.3, 0.25, 6, 32).rotateX(Math.PI / 2), std({ color: 0xdedbd2, roughness: 0.7 })).translateY(0.3));
   const fl = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 0.6, 20), std({ color: 0xe8532a, roughness: 0.8 })); fl.position.y = 0.6; isl.add(fl);
-  const nameT = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#1d5f3a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#fff'; g.lineWidth = 8; g.strokeRect(8, 8, w - 16, h - 16); g.fillStyle = '#fff'; g.font = '800 54px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('NOOSA JUNCTION', w / 2, h / 2 + 2); });
+  const nameT = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#1d5f3a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#fff'; g.lineWidth = 8; g.strokeRect(8, 8, w - 16, h - 16); g.fillStyle = '#fff'; g.font = '800 54px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SUNSHINE BEACH', w / 2, h / 2 + 2); });
   for (const r of [0, Math.PI / 2]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), std({ map: nameT, side: THREE.DoubleSide })); b.position.y = 2.2; b.rotation.y = r; isl.add(b); }
   isl.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2), std({ color: 0x888888 })).translateY(1));
   isl.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
@@ -852,8 +855,6 @@ function buildNoosaProps(scene, track) {
   };
   for (let i = 0; i < track.N; i++) {
     const s = track.surf[i];
-    if (s === 'gap' && i > track.N / 2 && i % 5 === 0) for (const lat of [-6, 1, 8]) { const p = spot(i, lat + rr(-1, 1), 0); house(p.x, p.z, Math.atan2(-track.t[i].x, -track.t[i].y) + rr(-0.2, 0.2)); }
-    if (s === 'road' && i > track.N * 0.93 && i % 12 === 0) for (const side of [-1, 1]) { const p = spot(i, side * (track.w[i] + rr(10, 16)), 0); house(p.x, p.z, rr(0, 6.3)); }
   }
 
   // sandstone boulders around Lions Rock
@@ -1009,13 +1010,15 @@ function buildBarriers(scene, track) {
   const tex = (a, b) => { const t = stripeTex(a, b, 2); t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.repeat.set(1, 1); return t; };
   const woodT = canvasTex(256, 64, (g, w, h) => { for (let y = 0; y < h; y += 16) { const s = 120 + rand() * 40; g.fillStyle = `rgb(${s},${s * 0.66 | 0},${s * 0.4 | 0})`; g.fillRect(0, y, w, 14); g.fillStyle = '#3b2616'; g.fillRect(0, y + 14, w, 2); } });
   woodT.wrapS = THREE.RepeatWrapping;
+  const concreteT = canvasTex(64, 32, (g, w, h) => { g.fillStyle = '#b9b6ae'; g.fillRect(0, 0, w, h); g.fillStyle = '#d42a1e'; g.fillRect(0, 0, w / 2, 5); g.fillStyle = '#f4f4f4'; g.fillRect(w / 2, 0, w / 2, 5); g.fillStyle = '#9d9a92'; g.fillRect(0, h - 3, w, 3); });
+  concreteT.wrapS = THREE.RepeatWrapping;
   const kinds = {
-    road: [0.9, new THREE.MeshStandardMaterial({ map: tex('#d42a1e', '#f4f4f4'), roughness: 0.5, side: THREE.DoubleSide })],
+    road: [0.7, new THREE.MeshStandardMaterial({ map: concreteT, roughness: 0.8, side: THREE.DoubleSide })],
     rock: [1.0, new THREE.MeshStandardMaterial({ color: 0xa8875f, roughness: 0.95, side: THREE.DoubleSide })],
     sand: [0.8, new THREE.MeshStandardMaterial({ map: tex('#1b6fb2', '#f4f4f4'), roughness: 0.5, side: THREE.DoubleSide })],
     dirt: [0.9, new THREE.MeshStandardMaterial({ map: woodT, roughness: 0.9, side: THREE.DoubleSide })],
     under: [1.4, new THREE.MeshStandardMaterial({ color: 0x4f6d63, roughness: 0.9, side: THREE.DoubleSide })],
-    cloud: [1.0, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2, transparent: true, opacity: 0.85, side: THREE.DoubleSide })],
+    cloud: [1.0, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide })],
   };
   kinds.creek = kinds.dirt;
   for (const [k, [h, mat]] of Object.entries(kinds)) {
@@ -1025,4 +1028,82 @@ function buildBarriers(scene, track) {
     if (k === 'creek' || !geos.length) continue;
     const m = new THREE.Mesh(mergeGeometries(geos), mat); m.castShadow = k !== 'cloud'; m.receiveShadow = true; scene.add(m);
   }
+}
+
+// ---------- Hastings Street + Noosa Junction shops, named spots, fig trees, street lights ----------
+function buildStreets(scene, track, Q) {
+  const std = o => new THREE.MeshStandardMaterial(o), col = new THREE.Color(), parts = [];
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3();
+  const heading = i => Math.atan2(-track.t[i].x, -track.t[i].y);
+  const at = (i, lat) => { const p = track.p[i], r = track.r[i]; return [p.x + r.x * lat, p.y + r.y * lat]; };
+  const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const addBox = (x, y, z, rot, W, H, D, c) => { m4.compose(v.set(x, y, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), sc.set(W, H, D)); parts.push({ geo: paint(box.clone().applyMatrix4(m4), col.setHex(c)), x, z }); };
+  const walls = [0xf6efe2, 0xe9f2f4, 0xf7dccb, 0xdcebd5, 0xfdf6ea, 0xf2e6c9, 0xe4e0f0], awn = [0x1b9aaa, 0xd6402f, 0x23395d, 0xf2b134, 0x2f8f5b, 0xffffff];
+  // shopfronts both sides: 2-3 storeys, coloured awnings over the footpath
+  const shopSpots = [];
+  for (let i = 0; i < track.N; i += 6) {
+    const z = track.zone[i]; if (z !== 'hastings' && z !== 'junction') continue;
+    for (const s of [-1, 1]) {
+      const D = rr(8, 11), H = z === 'hastings' ? rr(6.5, 10) : rr(4.5, 7.5), lat = s * (track.wall(i) + 3 + D / 2), [x, zz] = at(i, lat);
+      const y = gh(track, x, zz) - 0.3, rot = heading(i);
+      addBox(x, y, zz, rot, 8.6, H, D, walls[Math.floor(rand() * walls.length)]);
+      const [ax, az] = at(i, s * (track.wall(i) + 1.6));
+      addBox(ax, y + 3.1, az, rot, 8.4, 0.25, 2.8, awn[Math.floor(rand() * awn.length)]);   // awning
+      shopSpots.push([i, s]);
+    }
+  }
+  chunked(scene, std({ vertexColors: true, roughness: 0.75 }), parts);
+
+  // named spots Tom asked for, as shop signs facing the road
+  const sign = (text, bg, fg, i, s, w = 7) => {
+    const t = canvasTex(512, 96, (g, cw, ch) => { g.fillStyle = bg; g.fillRect(0, 0, cw, ch); g.fillStyle = fg; g.font = '900 54px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, cw / 2, ch / 2 + 2); });
+    const [x, z] = at(i, s * (track.wall(i) + 2.95)), mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 96 / 512), std({ map: t, roughness: 0.6 }));
+    mesh.position.set(x, gh(track, x, z) + 4.4, z); mesh.rotation.y = heading(i) + (s > 0 ? Math.PI / 2 : -Math.PI / 2);
+    scene.add(mesh);
+  };
+  const zoneIdx = z => { const l = []; for (let i = 0; i < track.N; i++) if (track.zone[i] === z) l.push(i); return l; };
+  const seaSide = i => { const [a, b] = [at(i, -12), at(i, 12)]; return seaDist(...a) > seaDist(...b) ? -1 : 1; };
+  const H = zoneIdx('hastings'), J = zoneIdx('junction'), Dx = zoneIdx('deus');
+  if (H.length) {
+    const i0 = H[Math.floor(H.length * 0.15)], i1 = H[Math.floor(H.length * 0.85)];
+    sign('NOOSA HEADS SLSC', '#ffd200', '#d6201f', i0, seaSide(i0), 8);
+    sign("LAGUNA JACK'S", '#f4efe2', '#1d5f7a', i1, seaSide(i1));
+  }
+  if (Dx.length) { const i = Dx[Math.floor(Dx.length / 2)]; sign('DEUS EX MACHINA', '#111111', '#ffffff', i, -seaSide(i), 8); }
+  // banner across the road at Noosa Junction
+  if (J.length) {
+    const i = J[2] ?? J[0], g = track.place(new THREE.Group(), i), w = track.wall(i);
+    const t = canvasTex(1024, 128, (c, cw, ch) => { c.fillStyle = '#1d5f3a'; c.fillRect(0, 0, cw, ch); c.fillStyle = '#ffd23f'; c.font = '900 80px Trebuchet MS, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('NOOSA JUNCTION', cw / 2, ch / 2 + 3); });
+    const pole = std({ color: 0x2b2b2b, metalness: 0.5, roughness: 0.5 });
+    for (const s of [-1, 1]) g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 7), pole).translateX(s * (w + 0.4)).translateY(3.5));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(2 * w + 1, 1.4, 0.2), [pole, pole, pole, pole, std({ map: t }), std({ map: t })]).translateY(6.2));
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    scene.add(g);
+  }
+
+  // big shady fig trees along Hastings Street
+  const figs = [];
+  for (const i of H) if (i % 7 === 0) { const s = (i / 7) % 2 ? 1 : -1, [x, z] = at(i, s * (track.wall(i) + 1.2)); figs.push([x, gh(track, x, z), z]); }
+  if (figs.length) {
+    const trunk = paint(new THREE.CylinderGeometry(0.35, 0.6, 4, 7).translate(0, 2, 0), new THREE.Color(0x6e5a48));
+    const crown = [[0, 5.2, 0, 3.4], [2.2, 4.6, 0.8, 2.4], [-2, 4.8, -0.6, 2.5], [0.4, 6.2, -1.6, 2.2]].map(([x, y, z, r]) => paint(new THREE.IcosahedronGeometry(r, 1).scale(1, 0.7, 1).translate(x, y, z), new THREE.Color(0x3f6b34)));
+    const im = new THREE.InstancedMesh(mergeGeometries([trunk, ...crown]), std({ vertexColors: true, roughness: 0.9, flatShading: true }), figs.length);
+    figs.forEach(([x, y, z], k) => { const s = rr(0.9, 1.2); m4.compose(v.set(x, y - 0.2, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rr(0, 6.3)), sc.set(s, s, s)); im.setMatrixAt(k, m4); });
+    im.castShadow = !!Q.shadow; scene.add(im);
+  }
+
+  // street lights along the roads
+  const lamps = [];
+  for (let i = 0; i < track.N; i += 22) {
+    if (track.surf[i] !== 'road' || track.w[i] > 14) continue;
+    for (const s of [-1, 1]) { const [x, z] = at(i, s * (track.wall(i) + 0.7)); lamps.push([x, gh(track, x, z), z, heading(i) + (s > 0 ? Math.PI / 2 : -Math.PI / 2)]); }
+  }
+  const lampGeo = mergeGeometries([
+    paint(new THREE.CylinderGeometry(0.07, 0.1, 6.5, 6).translate(0, 3.25, 0), new THREE.Color(0x5b6168)),
+    paint(new THREE.BoxGeometry(0.1, 0.1, 1.8).translate(0, 6.45, 0.85), new THREE.Color(0x5b6168)),
+    paint(new THREE.BoxGeometry(0.35, 0.18, 0.7).translate(0, 6.35, 1.7), new THREE.Color(0xfff4c8)),
+  ]);
+  const li = new THREE.InstancedMesh(lampGeo, std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }), lamps.length);
+  lamps.forEach(([x, y, z, r], k) => { m4.compose(v.set(x, y - 0.1, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r), sc.set(1, 1, 1)); li.setMatrixAt(k, m4); });
+  li.castShadow = false; scene.add(li);
 }

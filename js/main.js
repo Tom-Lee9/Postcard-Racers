@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, seaDist } from './world.js?v=8';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=8';
-import { Gyro } from './vr.js?v=8';
-import { Sound } from './audio.js?v=8';
-import { Hud } from './hud.js?v=8';
-import { Particles } from './effects.js?v=8';
-import { MicroBit } from './microbit.js?v=8';
+import { loadAssets, buildWorld, seaDist } from './world.js?v=9';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=9';
+import { Gyro } from './vr.js?v=9';
+import { Sound } from './audio.js?v=9';
+import { Hud } from './hud.js?v=9';
+import { Particles } from './effects.js?v=9';
+import { MicroBit } from './microbit.js?v=9';
 
 const $ = id => document.getElementById(id);
-const VERSION = 8;                                          // bump this AND every ?v= in imports + index.html together
+const VERSION = 9;                                          // bump this AND every ?v= in imports + index.html together
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-noosa-v8';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
