@@ -11,9 +11,12 @@ A short test track for the VR kart racer. It checks three things before we build
 - A 3-lap race with a countdown, lap times and a saved best lap.
 - Dust behind the wheels, splashes in the shallows, boost flames, and generated engine and surf sounds.
 
-## The Noosa lap (about 1.5 km, from Tom's My Maps route at 1/6 scale)
-Sunshine Beach surf club start → dive underwater along the coast → boost up Lions Rock → launch over the gap onto a road of clouds above the national park → slide down into Noosa Heads (boosts + ramps) → Noosa Junction roundabout (tight inside, or boost pads on the outside) → bush trail (log jumps, creek splash, koala signs) → up the hill and jump over the rooftops → down to the beach and the finish.
-Miss a jump and you're put back down just past the gap, already moving.
+## The Noosa lap (one lap, about 4.4 km: the real map at half scale)
+Built from OpenStreetMap: the real coastline, national park, beaches, streets and Hastings St / Noosa Junction buildings, with houses along the suburban streets and gum trees where the bush is.
+Sunshine Beach surf club start → underwater along the coast → boost up Lions Rock → launch into the clouds above the national park → slide down into Noosa Heads (boosts + ramps) → Noosa Junction roundabout (tight inside, or boost pads on the outside) → bush trail (log jumps, creek splash, koala signs) → over the rooftops → down to the beach and the finish.
+Barriers line the track like Mario Kart. Miss a jump and you're put back down just past the gap.
+
+Map data © OpenStreetMap contributors (ODbL). `assets/noosa-map.json` is made from it.
 
 ## Controls
 | | Joy-Cons | Phone (Play) | PC |
