@@ -24,6 +24,8 @@ let lastTogether = -10000
 let lastFlick = -10000
 let lastSend = 0
 let lastBits = -1
+let logoHeld = false
+let logoOffTime = 0
 
 // Which way gravity pulls across the screen tells us how far the wheel is turned
 function rawAngle(): number {
@@ -88,7 +90,14 @@ basic.forever(function () {
     let bits = 0
     if (a) bits += 1
     if (b) bits += 2
-    if (input.logoIsPressed()) bits += 4
+    // the logo is a touch sensor and can flicker under your thumb: only count it as let go after 80 ms off
+    if (input.logoIsPressed()) {
+        logoHeld = true
+        logoOffTime = now
+    } else if (now - logoOffTime > 80) {
+        logoHeld = false
+    }
+    if (logoHeld) bits += 4
     // send straight away when a button changes, otherwise every 40 ms
     if (connected && (bits != lastBits || now - lastSend >= 40)) {
         bluetooth.uartWriteString("s" + Math.round(wheelAngle()) + "," + bits + "\n")

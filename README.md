@@ -36,11 +36,12 @@ A short test track for the VR kart racer. It checks three things before we build
 ## Drifting
 - **Start:** tap drift to hop, then steer left or right as you land and keep holding. The kart swings its nose into the corner.
 - **Change the line:** while drifting, steer *into* the corner for a tight arc, or *out* for a wide one.
-- **Sparks:** blue → orange → purple. Steering into the corner (at least halfway) charges them about 2.5x faster: roughly 0.9 s, 1.9 s and 2.9 s. Steering out takes more than twice as long.
-- **Boost:** let go of drift. Blue = short boost (0.6 s), orange = big (1.7 s), purple = giant (2.6 s). The HUD shows three pips too, because the back-wheel sparks are hard to see from the cockpit.
+- **Sparks:** tiny blue sparks, then blue → orange → purple, each with a flash. Timings measured from Tom's own Mario Kart clips: steering *in* = blue 0.8 s, orange 1.6 s, purple 2.5 s. Neutral or steering out = about 2.4x slower (1.9 / 3.9 / 6.1 s).
+- **Boost:** let go of drift. Blue = 0.7 s, orange = 1.8 s, purple = 2.9 s. The HUD shows three pips too, because the back-wheel sparks are hard to see from the cockpit.
+- **Starting late:** if you hop and only steer a bit later, the drift still starts, as long as you're holding drift.
 - **Brake-drifting:** tap brake during a drift to tighten up without losing it. Drop below about 17 km/h and the drift ends with no boost.
 - **Tricks:** flick the micro:bit up (or press drift) while flying off the ramp. Land it for a short yellow boost.
-- Timing is based on Mario Kart's published charge rates, as a starting point to tune.
+- **Testing the logo:** on the menu, the micro:bit line shows A, B and logo lighting up live, plus a count of logo touches. Tap it 10 times and check the count says 10.
 
 **VR without a controller:** hold a finger on the screen to go and tilt your head like a steering wheel. You can turn head-tilt steering off in Settings.
 
