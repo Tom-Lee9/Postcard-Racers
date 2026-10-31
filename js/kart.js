@@ -1,6 +1,5 @@
 // The kart: model (body, wheels, driver) and arcade driving physics.
 import * as THREE from 'three';
-import { TRACK_Y } from './world.js?v=5';
 
 const paint = c => new THREE.MeshPhysicalMaterial({ color: c, metalness: 0.4, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
 const std = o => new THREE.MeshStandardMaterial(o);
@@ -134,6 +133,7 @@ export function buildKart(color = 0xe8322a, color2 = 0xf4f4f4, number = '7') {
 // ---------- physics ----------
 const SURF = {                  // top-speed multiplier, grip (how fast sideways sliding stops), rolling drag
   road: [1.0, 9, 1.5], sand: [0.94, 6, 2.0], off: [0.6, 4, 5], water: [0.35, 3, 9],
+  rock: [1.0, 9, 1.5], dirt: [0.95, 7, 2.2], cloud: [1.0, 9, 1.4], under: [0.9, 7, 2.5], creek: [0.8, 5, 4],
 };
 const fwd = new THREE.Vector3(), right = new THREE.Vector3();
 
@@ -165,10 +165,19 @@ export class Kart {
   reset(i) {
     const t = this.track, N = t.N; i = (i + N) % N;
     const p = t.p[i], d = t.t[i];
-    this.pos.set(p.x, TRACK_Y, p.y); this.yaw = Math.atan2(-d.x, -d.y);
+    this.pos.set(p.x, t.th[i], p.y); this.yaw = Math.atan2(-d.x, -d.y);
     this.vel.set(0, 0, 0); this.vy = 0; this.air = false; this.boost = 0; this.idx = this.lastGood = i;
     this.groundRate = 0; this.hop = false; this.drift = 0; this.charge = 0; this.tier = 0; this.visYaw = 0; this.trickT = -1; this.tricked = false;
     this.sync(0);
+  }
+  // back on the track. Missed a jump over a gap? Put the kart down just past it, already moving.
+  respawn() {
+    const t = this.track, N = t.N, i = this.lastGood;
+    for (let k = 1; k < 60; k++) if (t.surf[(i + k) % N] === 'gap') {
+      let j = (i + k) % N; while (t.surf[j] === 'gap') j = (j + 1) % N;
+      this.reset(j + 2); this.vel.copy(this.forward(fwd)).multiplyScalar(this.top * 0.8); return;
+    }
+    this.reset(i);
   }
   forward(out) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
 
@@ -188,6 +197,7 @@ export class Kart {
     this.idx = g.i; st.surf = g.surf;
     if (g.surf !== 'off' && g.surf !== 'water') this.lastGood = g.i;
     if (g.boost && !this.air) this.addBoost(1.3, 1.45);
+    if (!this.air) this.launch = g.ramp ? g.launch : 0;        // remember the launch ramp we are on
     this.boost = Math.max(0, this.boost - dt);
     const [mul, grip, drag] = SURF[g.surf];
     const top = this.top * mul * (this.boost > 0 ? this.boostMul : 1);
@@ -225,6 +235,7 @@ export class Kart {
         const k = this.steer * this.drift, tight = k >= 0 ? 0.55 + 0.45 * k : 0.04 + 0.51 * (1 + k) ** 1.6;
         yawRate = -this.drift * 2.0 * tight * Math.min(1, vf / 6);
         vr += -this.drift * vf * 0.25 * dt;                     // a little outward slide
+        vf -= Math.max(0, k) * 1.2 * dt;                        // turning in costs a little speed; neutral gets it back
         if (g.surf !== 'off' && g.surf !== 'water') this.charge += (k > 0.5 ? DRIFT.fast : DRIFT.slow) * dt;
         const tier = DRIFT.tiers.filter(x => this.charge >= x).length;
         if (tier > this.tier) { this.tier = tier; st.tierUp = tier; }
@@ -242,9 +253,9 @@ export class Kart {
     this.pos.addScaledVector(this.vel, dt);
 
     // up and down: follow the ground, fly off ramps and drops
-    const h = t.ground(this.pos.x, this.pos.z).h;
+    const gg = t.ground(this.pos.x, this.pos.z), h = gg.h;
     if (this.air) {
-      this.vy -= 22 * dt; this.pos.y += this.vy * dt;
+      this.vy -= (st.surf === 'under' ? 9 : 22) * dt; this.pos.y += this.vy * dt;   // floaty underwater
       if (this.pos.y <= h) {
         st.landed = this.hop ? 0 : Math.min(1, -this.vy / 8); this.pos.y = h; this.air = false; this.vy = 0;
         if (this.tricked) { this.addBoost(0.9, 1.3, 0xffe14a); st.mt = -1; }
@@ -252,14 +263,17 @@ export class Kart {
       }
     } else if (h < this.pos.y - 0.3 && this.groundRate > 1) {
       this.air = true; this.hop = false; this.vy = this.groundRate;
+      if (this.launch) { this.vy = Math.max(this.vy, this.launch); this.addBoost(1.6, 1.45, 0x3aa8ff); this.launch = 0; }   // blue launch boost
     } else {
       this.groundRate = Math.max(-5, Math.min(12, (h - this.pos.y) / Math.max(dt, 1e-3)));
       this.pos.y = h;
     }
 
     // fell in the sea or wandered off: back to the track
-    if (h < -0.9 || Math.abs(this.pos.x) > 480 || Math.abs(this.pos.z) > 780) this.respawnT += dt; else this.respawnT = 0;
-    if (this.respawnT > 0.8) { this.reset(this.lastGood); st.respawned = true; }
+    // fell in the sea, off the clouds, short of a jump, or wandered off: back to the track
+    const fell = (gg.surf === 'water' && h < -0.9) || this.pos.y < t.th[gg.i] - 8 || Math.abs(gg.lat) > 150;
+    if (fell) this.respawnT += dt; else this.respawnT = 0;
+    if (this.respawnT > 0.8) { this.respawn(); st.respawned = true; }
 
     if (this.trickT >= 0) this.trickT += dt;
     const visTarget = this.drift * DRIFT.angle * (0.75 + 0.25 * this.steer * this.drift);

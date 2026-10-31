@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, shoreX } from './world.js?v=5';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=5';
-import { Gyro } from './vr.js?v=5';
-import { Sound } from './audio.js?v=5';
-import { Hud } from './hud.js?v=5';
-import { Particles } from './effects.js?v=5';
-import { MicroBit } from './microbit.js?v=5';
+import { loadAssets, buildWorld, seaDist } from './world.js?v=7';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=7';
+import { Gyro } from './vr.js?v=7';
+import { Sound } from './audio.js?v=7';
+import { Hud } from './hud.js?v=7';
+import { Particles } from './effects.js?v=7';
+import { MicroBit } from './microbit.js?v=7';
 
 const $ = id => document.getElementById(id);
-const VERSION = 5;                                          // bump this AND every ?v= in imports + index.html together
-const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-sunshine';
+const VERSION = 7;                                          // bump this AND every ?v= in imports + index.html together
+const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-noosa';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
@@ -62,7 +62,7 @@ const race = { state: 'count', t: 3, time: 0, lap: 1, lapStart: 0, cp: 0, prevFr
 // ---------- load + build ----------
 $('status').textContent = 'Loading… 0%';
 loadAssets(renderer, f => { $('status').textContent = 'Loading… ' + Math.round(f * 100) + '%'; }).then(A => {
-  $('status').textContent = 'Building the beach…';
+  $('status').textContent = 'Building Noosa…';
   setTimeout(() => {
     world = buildWorld(scene, renderer, A, Q);
     model = buildKart();
@@ -79,6 +79,7 @@ loadAssets(renderer, f => { $('status').textContent = 'Loading… ' + Math.round
     document.querySelectorAll('#menu button').forEach(b => b.disabled = false);
     renderer.setAnimationLoop(loop);
     if (location.hash === '#play' || location.hash === '#vr') start(location.hash === '#vr');   // shortcut for testing
+    if (location.hash === '#bench') startBench();
   }, 30);
 }).catch(err => { $('status').textContent = 'Loading failed: ' + err.message; console.error(err); });
 
@@ -165,6 +166,7 @@ $('vr').onclick = () => start(true);
 $('exit').onclick = toMenu;
 $('mute').onclick = () => setMuted(!S.muted);
 $('openSettings').onclick = () => { $('menu').hidden = true; $('settings').hidden = false; };
+$('bench').onclick = startBench;
 $('back').onclick = () => { $('settings').hidden = true; $('menu').hidden = false; };
 $('setQuality').value = S.quality;
 $('setQuality').onchange = e => { S.quality = e.target.value; save(); location.reload(); };
@@ -241,7 +243,7 @@ function readInput() {
     if (edge(3)) toggleCam();                                    // X/Y : switch camera
     if (edge(8) && race.state === 'done') resetRace();           // - : race again
   }
-  if (AUTO) {                                                   // testing: ?auto=1 drives itself (later: CPU racers)
+  if (AUTO || bench) {                                          // testing: ?auto=1 drives itself (and the speed test) (later: CPU racers)
     const t = world.track, p = t.p[(kart.idx + 14) % t.N];
     let d = Math.atan2(-(p.x - kart.pos.x), -(p.y - kart.pos.z)) - kart.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
     return { throttle: 1, brake: 0, steer: Math.max(-1, Math.min(1, -d * 2.5)) };
@@ -317,13 +319,13 @@ const wheelL = new THREE.Vector3(-0.84, 0.1, 0.8), wheelR = new THREE.Vector3(0.
 const frontL = new THREE.Vector3(-0.9, 0.1, -0.8), frontR = new THREE.Vector3(0.9, 0.1, -0.8), sparkC = new THREE.Color();
 function updateEffects(dt) {
   const st = kart.state, spd = Math.abs(st.speed);
-  const rate = st.surf === 'off' ? 1 : st.surf === 'sand' ? 0.45 : st.surf === 'water' ? 1 : st.slip > 3 ? 0.4 : 0;
+  const rate = st.surf === 'off' ? 1 : st.surf === 'sand' ? 0.45 : st.surf === 'water' || st.surf === 'creek' ? 1 : st.surf === 'dirt' ? 0.5 : st.slip > 3 ? 0.4 : 0;
   if (!kart.air && spd > 4 && Math.random() < rate) {
     kart.forward(fwd);
     for (const w of [wheelL, wheelR]) {
       const p = model.root.localToWorld(tmp.copy(w));
       tmp2.copy(fwd).multiplyScalar(-spd * 0.15).add({ x: (Math.random() - 0.5) * 2, y: 1 + Math.random() * 1.5, z: (Math.random() - 0.5) * 2 });
-      const water = st.surf === 'water';
+      const water = st.surf === 'water' || st.surf === 'creek';
       dust.emit(p, tmp2, water ? foamC : sandC, water ? 0.5 : 0.6, water ? 0.7 : 1.2, water ? 1 : 1.6);
     }
   }
@@ -353,9 +355,31 @@ function updateEffects(dt) {
   dust.update(dt);
   sparks.update(dt);
 }
+// ---------- speed test (Settings → Run speed test): finds out what's holding the frame rate back ----------
+// Each step runs 4 s (the first second is ignored). If even a blank screen is stuck at 30, the browser is capping it.
+const BENCH = [['normal', 'normal'], ['halfres', 'half resolution'], ['noshadow', 'no shadows'], ['nologic', 'no game code'], ['blank', 'blank screen']];
+let bench = null;
+function startBench() { start(false); bench = { i: 0, t: 0, n: 0, acc: 0, js: 0, gpu: 0, out: [] }; setPR(maxPR);
+  race.state = 'racing'; race.msg = ''; toast('Speed test running… about 20 seconds. Hands off!', 20000); }
+function benchStep(dt, jsMs, drawMs) {
+  const b = bench, step = BENCH[b.i][0];
+  b.t += dt;
+  if (b.t > 1) { b.n++; b.acc += dt; if (step === 'normal') { b.js += jsMs; b.gpu += drawMs; } }
+  if (b.t < 4) return;
+  b.out.push(BENCH[b.i][1] + ' ' + Math.round(b.n / b.acc));
+  if (step === 'normal') b.out.push('(code ' + (b.js / b.n).toFixed(1) + ' ms, drawing ' + (b.gpu / b.n).toFixed(1) + ' ms)');
+  b.i++; b.t = b.n = b.acc = 0;
+  setPR(BENCH[b.i]?.[0] === 'halfres' ? maxPR * 0.5 : maxPR);
+  if (b.i < BENCH.length) return;
+  const msg = 'Speed test: ' + b.out.join(' · ') + ' fps · screen ' + innerWidth + 'x' + innerHeight + ' @' + maxPR.toFixed(1) + 'x';
+  console.log(msg); bench = null; toMenu(); $('benchResult').textContent = msg;
+  $('menu').hidden = true; $('settings').hidden = false;
+}
+
 function render() {
   const w = innerWidth, h = innerHeight;
-  renderer.shadowMap.needsUpdate = true;
+  if (bench && BENCH[bench.i][0] === 'blank') { renderer.setViewport(0, 0, w, h); renderer.clear(); return; }
+  renderer.shadowMap.needsUpdate = !(bench && BENCH[bench.i][0] === 'noshadow');
   if (mode === 'vr') {
     const half = w / 2, ipd = S.ipd / 1000;
     renderer.setScissorTest(true);
@@ -378,6 +402,7 @@ const minPR = Math.min(maxPR, 1);
 let acc = 0, cnt = 0, last = performance.now(), tried = null, holdT = 0;
 function setPR(v) { pr = v; renderer.setPixelRatio(pr); onResize(); }
 function perf(dt) {
+  if (bench) return;
   acc += dt; cnt++;
   if (acc < 2) return;
   const fps = cnt / acc;
@@ -394,6 +419,8 @@ function loop() {
   const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000);
   last = now; frame++; clock += dt;
   const logoNow = !!(mb.buttons & 4); if (logoNow && !logoWas) logoTaps++; logoWas = logoNow;
+  const t0 = performance.now();
+  if (bench && (BENCH[bench.i][0] === 'nologic' || BENCH[bench.i][0] === 'blank')) { render(); benchStep(dt, 0, 0); return; }
   const inp = mode === 'menu' ? { throttle: 0, brake: 0, steer: 0 } : readInput();
   if (mode !== 'menu') updateRace(dt);
   kart.update(dt, inp, mode === 'menu' || race.state === 'count');
@@ -411,7 +438,10 @@ function loop() {
     $('mbStatus').textContent = 'micro:bit connected · turned ' + Math.round(mb.angle) + '° · ' + on(1, 'A') + '  ' + on(2, 'B') + '  ' + on(4, 'logo') + ' · logo touches: ' + logoTaps;
   }
   hud.draw({ lap: race.lap, laps: LAPS, time: race.time, kmh: Math.abs(kart.state.speed) * 3.6, best: race.best, last: race.lastLap, msg: race.msg, sub: race.sub, msgColor: race.msgColor, tier: ks.tier, drifting: ks.drifting });
-  sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, drifting: ks.drifting, shore: Math.abs(shoreX(kart.pos.z) - kart.pos.x) });
+  sound.update({ speed: kart.state.speed, top: kart.top, throttle: inp.throttle, boosting: kart.state.boosting, loose: kart.state.surf === 'off' || kart.state.surf === 'water', slip: kart.state.slip, drifting: ks.drifting, shore: Math.abs(seaDist(kart.pos.x, kart.pos.z)) });
+  const t1 = performance.now();
   render();
+  const t2 = performance.now();
+  if (bench) benchStep(dt, t1 - t0, t2 - t1);
   perf(dt);
 }
