@@ -263,6 +263,13 @@ export class Kart {
       const into = (this.vel.x * r.x + this.vel.z * r.y) * s;
       if (into > 0) { this.vel.x -= r.x * s * into * 1.3; this.vel.z -= r.y * s * into * 1.3; this.vel.multiplyScalar(0.97); st.bump = Math.min(1, into / 10); }
     }
+    for (const o of t.obstacles || []) {                         // storm clouds: bounce off
+      const dx = this.pos.x - o.x, dz = this.pos.z - o.z, d = Math.hypot(dx, dz) || 1e-3, R = o.r + 0.9;
+      if (d > R || Math.abs(this.pos.y - o.y) > 3) continue;
+      const nx = dx / d, nz = dz / d; this.pos.x = o.x + nx * R; this.pos.z = o.z + nz * R;
+      const into = -(this.vel.x * nx + this.vel.z * nz);
+      if (into > 0) { this.vel.x += nx * into * 1.4; this.vel.z += nz * into * 1.4; this.vel.multiplyScalar(0.85); st.bump = 1; }
+    }
     if (this.air) {
       this.vy -= (st.surf === 'under' ? 9 : 22) * dt; this.pos.y += this.vy * dt;   // floaty underwater
       if (this.pos.y <= h) {

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, seaDist } from './world.js?v=9';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=9';
-import { Gyro } from './vr.js?v=9';
-import { Sound } from './audio.js?v=9';
-import { Hud } from './hud.js?v=9';
-import { Particles } from './effects.js?v=9';
-import { MicroBit } from './microbit.js?v=9';
+import { loadAssets, buildWorld, seaDist } from './world.js?v=10';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=10';
+import { Gyro } from './vr.js?v=10';
+import { Sound } from './audio.js?v=10';
+import { Hud } from './hud.js?v=10';
+import { Particles } from './effects.js?v=10';
+import { MicroBit } from './microbit.js?v=10';
 
 const $ = id => document.getElementById(id);
-const VERSION = 9;                                          // bump this AND every ?v= in imports + index.html together
+const VERSION = 10;                                          // bump this AND every ?v= in imports + index.html together
 const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-noosa-v8';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
@@ -80,6 +80,8 @@ loadAssets(renderer, f => { $('status').textContent = 'Loading… ' + Math.round
     renderer.setAnimationLoop(loop);
     if (location.hash === '#play' || location.hash === '#vr') start(location.hash === '#vr');   // shortcut for testing
     if (location.hash === '#bench') startBench();
+    const pick = new URLSearchParams(location.search).get('pick');   // testing: ?pick=x,y (screen -1..1) logs what is there
+    if (pick) setTimeout(() => { updateRig(0); scene.updateMatrixWorld(); const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(...pick.split(',').map(Number)), cam); for (const h of rc.intersectObjects(scene.children, true).slice(0, 4)) { const o = h.object; console.log('[pick]', o.type, o.geometry.type, 'color', o.material.color?.getHexString(), 'dist', h.distance.toFixed(0), 'at', h.point.toArray().map(Math.round), 'n', o.geometry.attributes.position.count); } }, 0);
   }, 30);
 }).catch(err => { $('status').textContent = 'Loading failed: ' + err.message; console.error(err); });
 

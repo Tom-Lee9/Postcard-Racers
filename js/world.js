@@ -71,8 +71,8 @@ const FLOATING = { cloud: 1, gap: 1 };
 // [x, z, height (null = follow the ground), surface, half width]. Racing order; the start/finish line is the first point.
 // Tom's My Maps route at half scale.
 const CTRL = [
-  [0, 0, 0.6, 'sand', 10], [9, -54, 0.6, 'sand', 10],
-  [36, -108, -1.5, 'under', 10], [90, -156, -5, 'under', 10], [123, -234, -6, 'under', 10], [141, -348, -6, 'under', 10], [111, -432, -2, 'under', 10],   // underwater along the coast
+  [0, 0, 0.6, 'sand', 11], [8, -55, 0.6, 'sand', 11], [16, -110, 0.6, 'sand', 11], [25, -160, 0.6, 'sand', 11],   // along the beach
+  [50, -205, -1.5, 'under', 10], [105, -245, -5, 'under', 10], [135, -300, -6, 'under', 10], [141, -360, -6, 'under', 10], [111, -432, -2, 'under', 10],   // underwater along the coast
   [93, -480, 2, 'rock', 8], [123, -525, 13, 'rock', 8], [135, -570, 24, 'rock', 8],                                          // boost up Lions Rock + the stairs
   [138, -582, 25, 'gap', 8], [143, -600, 26, 'gap', 8],                                                                      // launch straight over the gap...
   [147, -616, 28, 'cloud', 18], [158, -658, 32, 'cloud', 17], [171, -705, 36, 'cloud', 16], [135, -765, 44, 'cloud', 16],   // ...up into the clouds
@@ -80,16 +80,13 @@ const CTRL = [
   [-280, -960, 64, 'cloud', 16], [-370, -1010, 62, 'cloud', 16], [-450, -1080, 60, 'cloud', 16], [-530, -1130, 55, 'cloud', 16],
   [-610, -1190, 40, 'cloud', 15], [-680, -1250, 18, 'cloud', 14],                                                          // slide down to Noosa Heads
   [-746, -1277, null, 'road', 10], [-777, -1260, null, 'road', 10], [-787, -1224, null, 'road', 10], [-792, -1189, null, 'road', 10], [-824, -1158, null, 'road', 10], [-851, -1136, null, 'road', 10], [-886, -1125, null, 'road', 10], [-918, -1115, null, 'road', 10], [-935, -1081, null, 'road', 10],   // Park Road
-  [-958, -1054, null, 'road', 8, 'hastings'], [-989, -1018, null, 'road', 8, 'hastings'], [-1010, -990, null, 'road', 8, 'hastings'], [-1056, -993, null, 'road', 8, 'hastings'], [-1082, -992, null, 'road', 8, 'hastings'],   // Hastings Street
+  [-958, -1054, null, 'road', 8, 'hastings'], [-989, -1018, null, 'road', 8, 'hastings'], [-1010, -990, null, 'road', 8, 'hastings'], [-1056, -993, null, 'road', 8, 'hastings'],   // Hastings Street
   [-1079, -958, null, 'road', 10, 'deus'], [-1075, -925, null, 'road', 10], [-1083, -890, null, 'road', 10], [-1105, -853, null, 'road', 10], [-1149, -818, null, 'road', 10], [-1166, -785, null, 'road', 10], [-1164, -718, null, 'road', 10], [-1162, -686, null, 'road', 10], [-1158, -654, null, 'road', 10], [-1156, -604, null, 'road', 10], [-1155, -563, null, 'road', 10], [-1161, -528, null, 'road', 10],   // Noosa Drive, over the hill
   [-1172, -498, null, 'road', 10, 'junction'], [-1154, -468, null, 'road', 10, 'junction'], [-1127, -438, null, 'road', 10, 'junction'], [-1098, -404, null, 'road', 10, 'junction'], [-1075, -379, null, 'road', 10, 'junction'],   // Noosa Junction: turn left
   [-1035, -361, null, 'road', 11], [-1004, -341, null, 'road', 11], [-979, -321, null, 'road', 11], [-953, -316, null, 'road', 11], [-911, -305, null, 'road', 11], [-836, -309, null, 'road', 11], [-764, -314, null, 'road', 11],   // Sunshine Beach Road
-  [-729, -312, null, 'road', 22],                                                                                            // roundabout
-  [-615, -258, null, 'road', 11], [-528, -204, null, 'dirt', 10], [-480, -225, null, 'dirt', 10],                          // bush trail
-  [-393, -228, null, 'creek', 10], [-336, -216, null, 'dirt', 10], [-264, -201, null, 'dirt', 10],
-  [-222, -206, null, 'road', 10], [-185, -160, 16, 'road', 10], [-162, -122, 18, 'road', 10],                              // up the hill
-  [-150, -100, 15, 'road', 10], [-135, -72, 12, 'road', 10],                                                                 // ...and down it
-  [-120, -42, 8, 'road', 10], [-100, -2, 5, 'road', 10], [-81, 30, 3, 'road', 10], [-57, 40, 1.4, 'sand', 10], [-10, 70, 0.6, 'sand', 10],   // down to the beach + finish
+  [-723, -314, null, 'road', 10], [-690, -301, null, 'road', 10], [-653, -275, null, 'road', 10], [-537, -203, null, 'road', 10], [-510, -184, null, 'road', 10], [-489, -160, null, 'road', 10], [-477, -119, null, 'road', 10], [-481, -75, null, 'road', 10], [-481, -25, null, 'road', 10], [-468, 22, null, 'road', 10], [-431, 75, null, 'road', 10], [-371, 152, null, 'road', 10],   // Sunshine Beach streets
+  [-300, 190, null, 'road', 10], [-220, 210, null, 'road', 10], [-150, 220, null, 'road', 10], [-95, 224, 1.2, 'sand', 11],                                       // down to the beach
+  [-55, 208, 0.6, 'sand', 11], [-40, 165, 0.6, 'sand', 11], [-31, 115, 0.6, 'sand', 11], [-22, 70, 0.6, 'sand', 11], [-11, 30, 0.6, 'sand', 11],   // race up the beach to the finish
 ];
 
 export class Track {
@@ -134,12 +131,15 @@ export class Track {
     this.boosts = [
       f(99, -492, 6, 0, 3, -3), f(117, -515, 6, 0, 3, 3), f(129, -548, 5, 0, 3, 0),     // up the rock + stairs
       f(-786, -1251, 7, 0, 2.5, 3), f(-936, -1080, 7, 0, 2.5, -3), f(-1170, -560, 7, 0, 2.5, 0),   // Noosa Heads
-      f(-760, -326, 7, 0, 2.5, 15), f(-700, -300, 7, 0, 2.5, 15),                         // roundabout: outside line
-      f(-560, -228, 7, 0, 2.5, 0),
+      f(-36, 150, 7, 0, 2.5, -4), f(-20, 62, 7, 0, 2.5, 4),                              // the beach run home
     ];
     // launch ramps kick you up (vy) and forward (vf) this fast, in m/s, so every speed class makes the jump
     Object.assign(this.ramps[0], { vy: 16, vf: 34 });
-    this.island = { x: -729, z: -312, r: 10 };               // roundabout island (grass, slows you down)
+    this.island = { x: 1e5, z: 1e5, r: 0 };                  // (no roundabout island any more)
+    // storm clouds to dodge on the cloud road (not near the take-off or the slide down)
+    this.obstacles = [];
+    const cl = []; for (let i = 0; i < N; i++) if (this.surf[i] === 'cloud') cl.push(i);
+    for (let k = 90; k < cl.length - 110; k += 70) { const i = cl[k], lat = (this.obstacles.length % 2 ? 1 : -1) * this.w[i] * 0.45, p = this.p[i], r = this.r[i]; this.obstacles.push({ x: p.x + r.x * lat, z: p.y + r.y * lat, y: this.th[i], r: 2.6 }); }
     this.surfClub = { x: -40, z: -18 };
     this._n = { i: 0, lat: 0, d: 0 };
     this._g = { h: 0, surf: 'road', i: 0, lat: 0, boost: false, ramp: false };
@@ -350,6 +350,8 @@ export function buildWorld(scene, renderer, A, Q) {
   buildGums(scene, track, Q);
   buildBarriers(scene, track);
   buildStreets(scene, track, Q);
+  const reef = buildReef(scene, track);
+  buildStormClouds(scene, track);
   buildPalms(scene, track, A, Q);
   buildPlants(scene, track, A, Q);
 
@@ -363,7 +365,7 @@ export function buildWorld(scene, renderer, A, Q) {
         sunLight.target.position.copy(focus);
         sunLight.position.copy(focus).addScaledVector(sun, 150);
       }
-      props.update(dt, t);
+      props.update(dt, t); reef.update(t);
       seaMat.uniforms.uTime.value = t;
     },
   };
@@ -531,6 +533,9 @@ function buildTrackSurface(scene, track, A) {
   band('sand', sandRoad, 2, 0.004, 18).renderOrder = 0.5;
   band('dirt', dirt, 2, 0.004, 18).renderOrder = 0.5;
   band('creek', creek, 1.5, 0.05);
+  const brickT = canvasTex(256, 256, (g, cw, ch) => { g.fillStyle = '#7e4a35'; g.fillRect(0, 0, cw, ch); for (let y = 0; y < ch; y += 16) for (let x = -(y / 16 % 2) * 16; x < cw; x += 32) { const s = rand() * 30; g.fillStyle = `rgb(${172 + s},${98 + s * 0.6 | 0},${72 + s * 0.4 | 0})`; g.fillRect(x + 1, y + 1, 30, 14); } });
+  brickT.wrapS = brickT.wrapT = THREE.RepeatWrapping; brickT.repeat.set(4, 1);
+  add(track.runs(i => track.zone[i] === 'hastings').map(r => track.strip(r, i => -W(i), i => W(i), 0.006, 4)), off(std({ map: brickT, roughness: 0.8 }), 3));
   // white edge lines on the road, red/white kerbs on the corners
   const isRoad = is('road');
   const kerbed = i => isRoad(i) && Math.abs(track.curv[(i + 6) % track.N]) + Math.abs(track.curv[(i - 6 + track.N) % track.N]) > 0.022;
@@ -997,11 +1002,14 @@ function buildGums(scene, track, Q) {
 function buildBarriers(scene, track) {
   const vstrip = (idx, lat, h, vScale) => {
     const pos = [], uv = [], ind = []; let u = 0;
-    idx.forEach((i, k) => {
-      if (k) u += track.p[i].distanceTo(track.p[idx[k - 1]]) / vScale;
-      const p = track.p[i], r = track.r[i], L = lat(i), x = p.x + r.x * L, z = p.y + r.y * L, y = track.th[i];
+    let last = null, n = 0;
+    idx.forEach((i) => {
+      const p = track.p[i], r = track.r[i], t = track.t[i], L = lat(i), x = p.x + r.x * L, z = p.y + r.y * L, y = track.th[i];
+      if (last && (x - last[0]) * t.x + (z - last[1]) * t.y < 0.3) return;   // would go backwards: skip
+      if (last) u += Math.hypot(x - last[0], z - last[1]) / vScale;
       pos.push(x, y - 0.3, z, x, y + h, z); uv.push(u, 0, u, 1);
-      if (k) { const a = (k - 1) * 2; ind.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      if (n) { const a = (n - 1) * 2; ind.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      last = [x, z]; n++;
     });
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ind); g.computeVertexNormals();
@@ -1018,7 +1026,7 @@ function buildBarriers(scene, track) {
     sand: [0.8, new THREE.MeshStandardMaterial({ map: tex('#1b6fb2', '#f4f4f4'), roughness: 0.5, side: THREE.DoubleSide })],
     dirt: [0.9, new THREE.MeshStandardMaterial({ map: woodT, roughness: 0.9, side: THREE.DoubleSide })],
     under: [1.4, new THREE.MeshStandardMaterial({ color: 0x4f6d63, roughness: 0.9, side: THREE.DoubleSide })],
-    cloud: [1.0, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide })],
+    cloud: [1.1, new THREE.MeshStandardMaterial({ map: canvasTex(8, 64, (g, w, h) => { g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffcf40'; g.fillRect(0, 0, w, 12); }), emissive: 0x554411, transparent: true, depthWrite: false, side: THREE.DoubleSide })],
   };
   kinds.creek = kinds.dirt;
   for (const [k, [h, mat]] of Object.entries(kinds)) {
@@ -1037,22 +1045,27 @@ function buildStreets(scene, track, Q) {
   const heading = i => Math.atan2(-track.t[i].x, -track.t[i].y);
   const at = (i, lat) => { const p = track.p[i], r = track.r[i]; return [p.x + r.x * lat, p.y + r.y * lat]; };
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const addBox = (x, y, z, rot, W, H, D, c) => { m4.compose(v.set(x, y, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), sc.set(W, H, D)); parts.push({ geo: paint(box.clone().applyMatrix4(m4), col.setHex(c)), x, z }); };
+  const plain = [];
+  const addBox = (x, y, z, rot, W, H, D, c, list = parts) => { m4.compose(v.set(x, y, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), sc.set(W, H, D)); list.push({ geo: paint(box.clone().applyMatrix4(m4), col.setHex(c)), x, z }); };
   const walls = [0xf6efe2, 0xe9f2f4, 0xf7dccb, 0xdcebd5, 0xfdf6ea, 0xf2e6c9, 0xe4e0f0], awn = [0x1b9aaa, 0xd6402f, 0x23395d, 0xf2b134, 0x2f8f5b, 0xffffff];
   // shopfronts both sides: 2-3 storeys, coloured awnings over the footpath
   const shopSpots = [];
   for (let i = 0; i < track.N; i += 6) {
     const z = track.zone[i]; if (z !== 'hastings' && z !== 'junction') continue;
     for (const s of [-1, 1]) {
-      const D = rr(8, 11), H = z === 'hastings' ? rr(6.5, 10) : rr(4.5, 7.5), lat = s * (track.wall(i) + 3 + D / 2), [x, zz] = at(i, lat);
+      const hs = z === 'hastings', D = rr(8, 11), H = hs ? rr(5.5, 7.5) : rr(4.5, 7), lat = s * (track.wall(i) + 3 + D / 2), [x, zz] = at(i, lat);
       const y = gh(track, x, zz) - 0.3, rot = heading(i);
-      addBox(x, y, zz, rot, 8.6, H, D, walls[Math.floor(rand() * walls.length)]);
+      addBox(x, y, zz, rot, 8.6, H, D, (hs ? [0xf4f4f0, 0xe4e5e2, 0xd5d8da, 0xf7f3ea] : walls)[Math.floor(rand() * (hs ? 4 : walls.length))]);
       const [ax, az] = at(i, s * (track.wall(i) + 1.6));
-      addBox(ax, y + 3.1, az, rot, 8.4, 0.25, 2.8, awn[Math.floor(rand() * awn.length)]);   // awning
+      addBox(ax, y + 3.1, az, rot, 8.4, 0.22, 2.8, (hs ? [0xd8dadb, 0x9aa0a5, 0xeeeeee] : awn)[Math.floor(rand() * (hs ? 3 : awn.length))], plain);   // awning
+      if (hs) { const [bx, bz] = at(i, s * (track.wall(i) + 0.9)); addBox(bx, y + 0.1, bz, rot, 6, 0.55, 1.2, 0x4f8f3a, plain); }   // garden bed
       shopSpots.push([i, s]);
     }
   }
-  chunked(scene, std({ vertexColors: true, roughness: 0.75 }), parts);
+  // shopfront texture: dark glass on the ground floor, rendered wall + windows above (tinted per shop)
+  const facadeT = canvasTex(256, 256, (g, cw, ch) => { g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#5d6e7a'; for (let x = 18; x < cw; x += 60) g.fillRect(x, 40, 40, 50); g.fillStyle = '#2e3d48'; g.fillRect(0, 150, cw, 106); g.fillStyle = '#9fb4c2'; for (let x = 0; x < cw; x += 64) g.fillRect(x, 150, 4, 106); g.fillStyle = 'rgba(255,255,255,0.25)'; for (let x = 10; x < cw; x += 64) g.fillRect(x, 160, 14, 90); });
+  chunked(scene, std({ map: facadeT, vertexColors: true, roughness: 0.6 }), parts);
+  chunked(scene, std({ vertexColors: true, roughness: 0.8 }), plain);
 
   // named spots Tom asked for, as shop signs facing the road
   const sign = (text, bg, fg, i, s, w = 7) => {
@@ -1083,7 +1096,17 @@ function buildStreets(scene, track, Q) {
 
   // big shady fig trees along Hastings Street
   const figs = [];
-  for (const i of H) if (i % 7 === 0) { const s = (i / 7) % 2 ? 1 : -1, [x, z] = at(i, s * (track.wall(i) + 1.2)); figs.push([x, gh(track, x, z), z]); }
+  for (const i of H) if (i % 9 === 0) for (const s of [-1, 1]) { const [x, z] = at(i, s * (track.wall(i) + 1.4)); figs.push([x, gh(track, x, z), z]); }
+  if (Dx.length) { const [x, z] = at(Dx[0], 22); figs.push([x, gh(track, x, z), z]); }
+  const pand = [];
+  for (const i of H) if (i % 9 === 4) for (const s of [-1, 1]) { const [x, z] = at(i, s * (track.wall(i) + 1.0)); pand.push([x, gh(track, x, z), z]); }
+  if (pand.length) {
+    const leaves = []; for (let k = 0; k < 9; k++) leaves.push(paint(new THREE.BoxGeometry(0.12, 0.05, 2.2).translate(0, 0, 1.1).rotateX(-0.5 - rand() * 0.6).rotateY(k / 9 * 6.28).translate(0.3, 4.4, 0), new THREE.Color(0x6e8f4a)));
+    const pg = mergeGeometries([paint(new THREE.CylinderGeometry(0.1, 0.16, 4.4, 5).translate(0, 2.2, 0).rotateZ(0.08), new THREE.Color(0x8a7a66)), ...leaves]);
+    const pm = new THREE.InstancedMesh(pg, std({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }), pand.length);
+    pand.forEach(([x, y, z], k) => { m4.compose(v.set(x, y - 0.1, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rr(0, 6.3)), sc.setScalar(rr(0.85, 1.15))); pm.setMatrixAt(k, m4); });
+    scene.add(pm);
+  }
   if (figs.length) {
     const trunk = paint(new THREE.CylinderGeometry(0.35, 0.6, 4, 7).translate(0, 2, 0), new THREE.Color(0x6e5a48));
     const crown = [[0, 5.2, 0, 3.4], [2.2, 4.6, 0.8, 2.4], [-2, 4.8, -0.6, 2.5], [0.4, 6.2, -1.6, 2.2]].map(([x, y, z, r]) => paint(new THREE.IcosahedronGeometry(r, 1).scale(1, 0.7, 1).translate(x, y, z), new THREE.Color(0x3f6b34)));
@@ -1106,4 +1129,71 @@ function buildStreets(scene, track, Q) {
   const li = new THREE.InstancedMesh(lampGeo, std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }), lamps.length);
   lamps.forEach(([x, y, z, r], k) => { m4.compose(v.set(x, y - 0.1, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r), sc.set(1, 1, 1)); li.setMatrixAt(k, m4); });
   li.castShadow = false; scene.add(li);
+}
+
+// ---------- under the sea: coral, fish schools and dolphins leaping over the track ----------
+function buildReef(scene, track) {
+  const std = o => new THREE.MeshStandardMaterial(o), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3(), col = new THREE.Color();
+  const under = []; for (let i = 0; i < track.N; i++) if (track.surf[i] === 'under') under.push(i);
+  if (!under.length) return { update() {} };
+  const at = (i, lat) => { const p = track.p[i], r = track.r[i]; return [p.x + r.x * lat, p.y + r.y * lat]; };
+  // coral: branches, brain coral and tube sponges in reef colours on the seabed beside the road
+  const shapes = [new THREE.ConeGeometry(0.5, 2.2, 6).translate(0, 1.1, 0), new THREE.SphereGeometry(1, 10, 7).scale(1, 0.6, 1), new THREE.CylinderGeometry(0.25, 0.35, 1.6, 7).translate(0, 0.8, 0)];
+  const cols = [0xff6f91, 0xff9a3c, 0xb463ff, 0xffd23f, 0x4fd1c5, 0xff4f5e];
+  shapes.forEach((g, gi) => {
+    const list = [];
+    for (let k = 0; k < 110; k++) {
+      const i = under[Math.floor(rand() * under.length)], lat = (rand() < 0.5 ? -1 : 1) * (track.wall(i) + rr(0.8, 22)), [x, z] = at(i, lat);
+      list.push([x, gh(track, x, z), z, rr(0.6, 1.8)]);
+    }
+    const im = new THREE.InstancedMesh(g, std({ roughness: 0.7 }), list.length);
+    list.forEach(([x, y, z, s], k) => { m4.compose(v.set(x, y - 0.1, z), q.setFromEuler(new THREE.Euler(rr(-0.2, 0.2), rr(0, 6.3), rr(-0.2, 0.2))), sc.set(s, s * rr(0.7, 1.5), s)); im.setMatrixAt(k, m4); im.setColorAt(k, col.setHex(cols[Math.floor(rand() * cols.length)])); });
+    scene.add(im);
+  });
+  // fish: little bright fish swimming in loops near the road
+  const fishGeo = mergeGeometries([new THREE.SphereGeometry(0.3, 8, 6).scale(1, 0.8, 2), new THREE.ConeGeometry(0.25, 0.4, 4).rotateX(-Math.PI / 2).translate(0, 0, 0.75)]);
+  const schools = [];
+  for (let s = 0; s < 6; s++) {
+    const i = under[Math.floor((s + 0.5) / 6 * under.length)], [x, z] = at(i, (s % 2 ? 1 : -1) * (track.wall(i) + rr(3, 8)));
+    schools.push({ x, z, y: track.th[i] + rr(1.5, 3.5), r: rr(3, 6), sp: rr(0.4, 0.8) * (s % 2 ? 1 : -1), c: cols[s % cols.length] });
+  }
+  const PER = 12, fish = new THREE.InstancedMesh(fishGeo, std({ roughness: 0.4 }), schools.length * PER);
+  schools.forEach((sc0, s) => { for (let k = 0; k < PER; k++) fish.setColorAt(s * PER + k, col.setHex(sc0.c)); });
+  scene.add(fish);
+  // dolphins: three take turns leaping right over the road, about halfway along the underwater section
+  const body = std({ color: 0x7d8fa0, roughness: 0.35 });
+  const dolphinGeo = mergeGeometries([
+    new THREE.CapsuleGeometry(0.45, 2, 4, 10).rotateX(Math.PI / 2),
+    new THREE.ConeGeometry(0.25, 0.7, 4).translate(0, 0.6, 0.1),
+    new THREE.BoxGeometry(1.1, 0.08, 0.4).translate(0, 0, 1.45),
+    new THREE.ConeGeometry(0.18, 0.6, 6).rotateX(-Math.PI / 2).translate(0, -0.05, -1.5),
+  ]);
+  const mid = under[Math.floor(under.length / 2)], dolphins = [];
+  for (let d = 0; d < 3; d++) { const m = new THREE.Mesh(dolphinGeo, body); m.castShadow = true; scene.add(m); dolphins.push({ m, off: d * 1.3, i: (mid + (d - 1) * 6 + track.N) % track.N }); }
+  const look = new THREE.Vector3();
+  return {
+    update(t) {
+      schools.forEach((s, si) => {
+        for (let k = 0; k < PER; k++) {
+          const a = t * s.sp + k * 0.52, r = s.r + Math.sin(k * 1.7) * 1.2;
+          v.set(s.x + Math.cos(a) * r, s.y + Math.sin(a * 2 + k) * 0.4, s.z + Math.sin(a) * r);
+          q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -a + (s.sp > 0 ? 0 : Math.PI));
+          m4.compose(v, q, sc.set(1, 1, 1)); fish.setMatrixAt(si * PER + k, m4);
+        }
+      });
+      fish.instanceMatrix.needsUpdate = true;
+      for (const d of dolphins) {
+        const u = ((t * 0.25 + d.off / 4) % 1), lat = (u - 0.5) * 40, y = track.th[d.i] + 1 + (1 - (2 * u - 1) ** 2) * 9;   // arc from one side to the other
+        const [x, z] = at(d.i, lat), [nx, nz] = at(d.i, lat + 1), ny = track.th[d.i] + 1 + (1 - (2 * (u + 0.025) - 1) ** 2) * 9;
+        d.m.position.set(x, y, z); d.m.lookAt(look.set(nx, ny, nz)); d.m.rotateY(Math.PI);
+      }
+    },
+  };
+}
+
+// ---------- storm clouds sitting on the cloud road: steer round them (the kart bounces off) ----------
+function buildStormClouds(scene, track) {
+  const g = mergeGeometries([[0, 1.6, 0, 2.2], [1.5, 1.2, 0.6, 1.6], [-1.4, 1.3, -0.5, 1.7], [0.2, 2.8, 0, 1.5]].map(([x, y, z, r]) => new THREE.IcosahedronGeometry(r, 1).translate(x, y, z)));
+  const mat = new THREE.MeshStandardMaterial({ color: 0x5d6675, roughness: 1, flatShading: true });
+  for (const o of track.obstacles) { const m = new THREE.Mesh(g, mat); m.position.set(o.x, o.y - 0.5, o.z); m.rotation.y = rr(0, 6.3); m.castShadow = true; scene.add(m); }
 }
