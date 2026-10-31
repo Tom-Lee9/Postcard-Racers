@@ -197,7 +197,7 @@ export class Kart {
     this.idx = g.i; st.surf = g.surf;
     if (g.surf !== 'off' && g.surf !== 'water') this.lastGood = g.i;
     if (g.boost && !this.air) this.addBoost(1.3, 1.45);
-    if (!this.air) this.launch = g.ramp ? g.launch : 0;        // remember the launch ramp we are on
+    if (!this.air) { this.launch = g.ramp ? g.launch : 0; this.launchV = g.ramp ? g.launchV : 0; }   // remember the launch ramp we are on
     this.boost = Math.max(0, this.boost - dt);
     const [mul, grip, drag] = SURF[g.surf];
     const top = this.top * mul * (this.boost > 0 ? this.boostMul : 1);
@@ -254,6 +254,15 @@ export class Kart {
 
     // up and down: follow the ground, fly off ramps and drops
     const gg = t.ground(this.pos.x, this.pos.z), h = gg.h;
+    // barriers, like Mario Kart: bounce off the edges instead of leaving the track
+    const wl = t.wall(gg.i) - 0.9;
+    st.bump = 0;
+    if (Math.abs(gg.lat) > wl) {
+      const r = t.r[gg.i], s = Math.sign(gg.lat), push = Math.abs(gg.lat) - wl;
+      this.pos.x -= r.x * s * push; this.pos.z -= r.y * s * push;
+      const into = (this.vel.x * r.x + this.vel.z * r.y) * s;
+      if (into > 0) { this.vel.x -= r.x * s * into * 1.3; this.vel.z -= r.y * s * into * 1.3; this.vel.multiplyScalar(0.97); st.bump = Math.min(1, into / 10); }
+    }
     if (this.air) {
       this.vy -= (st.surf === 'under' ? 9 : 22) * dt; this.pos.y += this.vy * dt;   // floaty underwater
       if (this.pos.y <= h) {
@@ -263,7 +272,10 @@ export class Kart {
       }
     } else if (h < this.pos.y - 0.3 && this.groundRate > 1) {
       this.air = true; this.hop = false; this.vy = this.groundRate;
-      if (this.launch) { this.vy = Math.max(this.vy, this.launch); this.addBoost(1.6, 1.45, 0x3aa8ff); this.launch = 0; }   // blue launch boost
+      if (this.launch) {                                         // blue launch boost: up and forward fast enough to clear the gap
+        this.vy = Math.max(this.vy, this.launch); this.addBoost(1.6, 1.45, 0x3aa8ff); this.launch = 0;
+        const v = this.vel.dot(fwd); if (v < this.launchV) this.vel.addScaledVector(fwd, this.launchV - v);
+      }
     } else {
       this.groundRate = Math.max(-5, Math.min(12, (h - this.pos.y) / Math.max(dt, 1e-3)));
       this.pos.y = h;

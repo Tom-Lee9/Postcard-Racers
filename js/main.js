@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { loadAssets, buildWorld, seaDist } from './world.js?v=7';
-import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=7';
-import { Gyro } from './vr.js?v=7';
-import { Sound } from './audio.js?v=7';
-import { Hud } from './hud.js?v=7';
-import { Particles } from './effects.js?v=7';
-import { MicroBit } from './microbit.js?v=7';
+import { loadAssets, buildWorld, seaDist } from './world.js?v=8';
+import { buildKart, Kart, EYE, DRIFT } from './kart.js?v=8';
+import { Gyro } from './vr.js?v=8';
+import { Sound } from './audio.js?v=8';
+import { Hud } from './hud.js?v=8';
+import { Particles } from './effects.js?v=8';
+import { MicroBit } from './microbit.js?v=8';
 
 const $ = id => document.getElementById(id);
-const VERSION = 7;                                          // bump this AND every ?v= in imports + index.html together
-const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-noosa';
+const VERSION = 8;                                          // bump this AND every ?v= in imports + index.html together
+const KEY = 'postcard-racers-settings', BEST = 'postcard-racers-best-noosa-v8';
 const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const S = Object.assign({ quality: mobile ? 'medium' : 'high', cam: 'cockpit', top: 28, tilt: true, muted: false, ipd: 63, fov: 80, fps: false, lock: 50, mbFlip: false }, (() => {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
@@ -21,7 +21,7 @@ const QUALITY = {
   high: { pr: 2, shadow: 2048, palms: 170, ferns: 260, shrubs: 45, seg: 1 },
 };
 const Q = QUALITY[S.quality] || QUALITY.medium;
-const LAPS = 3;
+const LAPS = 1;                                              // one big lap of Noosa
 const AUTO = new URLSearchParams(location.search).has('auto');
 let logoTaps = 0, logoWas = false;                            // counts logo touches on the menu, to test how reliable it is
 const SPARK = +new URLSearchParams(location.search).get('spark') || 0;      // testing: ?spark=1..3 shows drift sparks

@@ -1,4 +1,5 @@
-// Noosa: track shape, terrain, sea, clouds, palms, plants and props.
+// Noosa (real map, half scale): track shape, terrain, sea, clouds, streets, houses, trees, barriers and props.
+// Map data (c) OpenStreetMap contributors, ODbL.
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/GLTFLoader.js';
@@ -22,45 +23,75 @@ let seed = 7;
 const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;     // repeatable random, same world every load
 const rr = (a, b) => a + (b - a) * rand();
 
-// ---------- the land ----------
-// x = east, z = south. Tom's My Maps route at 1/6 scale (origin = the surf club start line).
-// Ocean to the east (Sunshine Beach), the national park headland bulges out past Lions Rock, Laguna Bay to the north.
-const eastShore = z => 14 + 2 * Math.sin(z * 0.03) + 62 * ss(-150, -195, z) * ss(-470, -330, z);
-const northShore = x => -448 + 4 * Math.sin(x * 0.02);
-export const seaDist = (x, z) => Math.max(x - eastShore(z), northShore(x) - z);   // + = out to sea
+// ---------- the land: real Noosa from OpenStreetMap (half scale; origin = Sunshine Beach surf club start) ----------
+// x = east, z = south. assets/noosa-map.json holds a 5 m grid of distance-to-sea and land cover, plus roads + buildings.
+let MAP = null;
+export function setMap(m) {
+  const dec = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const { NX, NZ } = m, sea = new Int8Array(dec(m.sea).buffer), cover = dec(m.cover);
+  // "hilliness": the national park (forest + rock) gets big hills, blurred so they don't stop dead at the forest edge
+  let hill = new Float32Array(NX * NZ);
+  for (let k = 0; k < NX * NZ; k++) hill[k] = cover[k] === m.codes.forest || cover[k] === m.codes.rock ? 1 : 0;
+  const blur = (a, r) => {
+    const b = new Float32Array(a.length), c = new Float32Array(a.length);
+    for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) { let s = 0, n = 0; for (let d = -r; d <= r; d++) { const xx = x + d; if (xx >= 0 && xx < NX) { s += a[z * NX + xx]; n++; } } b[z * NX + x] = s / n; }
+    for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) { let s = 0, n = 0; for (let d = -r; d <= r; d++) { const zz = z + d; if (zz >= 0 && zz < NZ) { s += b[zz * NX + x]; n++; } } c[z * NX + x] = s / n; }
+    return c;
+  };
+  hill = blur(blur(hill, 6), 6);
+  MAP = { ...m, sea, cover, hill };
+}
+export const mapInfo = () => MAP;
+function bil(arr, x, z) {
+  const { X0, Z0, C, NX, NZ } = MAP;
+  const fx = Math.min(NX - 1.001, Math.max(0, (x - X0) / C - 0.5)), fz = Math.min(NZ - 1.001, Math.max(0, (z - Z0) / C - 0.5));
+  const i = Math.floor(fx), k = Math.floor(fz), u = fx - i, v = fz - k, a = k * NX + i;
+  return (arr[a] * (1 - u) + arr[a + 1] * u) * (1 - v) + (arr[a + NX] * (1 - u) + arr[a + NX + 1] * u) * v;
+}
+export const seaDist = (x, z) => bil(MAP.sea, x, z);                       // + = out to sea (metres)
+const shoreAt = z => { for (let x = -80; x < 300; x++) if (seaDist(x, z) > -4) return x; return 60; };   // where the beach meets the water
+export function coverAt(x, z) {
+  const { X0, Z0, C, NX, NZ } = MAP, i = Math.floor((x - X0) / C), k = Math.floor((z - Z0) / C);
+  return i < 0 || k < 0 || i >= NX || k >= NZ ? 0 : MAP.cover[k * NX + i];
+}
 function natural(x, z) {
   const d = seaDist(x, z);
   let h = d > 0 ? -d * 0.06 - Math.max(0, d - 40) * 0.1 : Math.min(0.45, -d * 0.03);
-  h += ss(-30, -70, d) * (1.5 + 2.5 * (fbm(x * 0.011, z * 0.011) + 0.5));   // dunes behind the beach
-  h += ss(-60, -220, d) * (6 + 10 * (fbm(x * 0.004 + 7, z * 0.004) + 0.5)); // green hills inland (kept under the clouds)
+  h += ss(-25, -60, d) * (1.5 + 2.5 * (fbm(x * 0.011, z * 0.011) + 0.5));             // dunes behind the beach
+  const inland = ss(-40, -160, d);
+  h += inland * (3 + 7 * (fbm(x * 0.004 + 7, z * 0.004) + 0.5));                      // rolling suburbs
+  h += inland * bil(MAP.hill, x, z) * (6 + 20 * (fbm(x * 0.006 + 3, z * 0.006 + 9) + 0.5));   // national park hills (under the clouds)
   return h;
 }
-// track surfaces that don't flatten the ground around them (you can fall off these)
+// track surfaces that don't flatten the ground around them
 const FLOATING = { cloud: 1, gap: 1 };
 
 // ---------- the track ----------
-// [x, z, height, surface, half width]. Racing order; the start/finish line is the first point.
+// [x, z, height (null = follow the ground), surface, half width]. Racing order; the start/finish line is the first point.
+// Tom's My Maps route at half scale.
 const CTRL = [
-  [0, 0, 0.5, 'sand', 7], [3, -18, 0.5, 'sand', 7],
-  [12, -36, -1, 'under', 7], [30, -52, -4, 'under', 7], [44, -78, -4.5, 'under', 7], [47, -116, -4.5, 'under', 7], [37, -144, -1.5, 'under', 7], // underwater along the coast
-  [31, -160, 1.5, 'rock', 6], [41, -175, 8, 'rock', 6], [45, -190, 14, 'rock', 6],                    // up Lions Rock and the stairs
-  [47, -198, 15, 'gap', 6], [50, -209, 15, 'gap', 6],                                                  // launch: fly straight over the gap...
-  [52.5, -219, 17, 'cloud', 10], [58, -240, 18.5, 'cloud', 9], [63, -262, 20, 'cloud', 8], [40, -284, 21.5, 'cloud', 7], [-12, -284, 22, 'cloud', 7], [-70, -290, 23, 'cloud', 7], [-112, -308, 24, 'cloud', 7],
-  [-150, -345, 22, 'cloud', 7], [-185, -385, 18, 'cloud', 7], [-218, -408, 10, 'cloud', 7],          // ...race on the clouds
-  [-247, -428, 2.5, 'road', 7], [-275, -404, 2, 'road', 7], [-305, -366, 2, 'road', 7],               // Noosa Heads: boosts + ramps
-  [-336, -332, 2, 'road', 7], [-356, -318, 2, 'road', 7], [-362, -298, 2.5, 'road', 7], [-386, -268, 3, 'road', 7],
-  [-391, -164, 4, 'road', 7], [-326, -109, 5, 'road', 7], [-292, -101, 5, 'road', 8],
-  [-243, -104, 5, 'road', 13],                                                                         // Noosa Junction roundabout
-  [-205, -86, 5, 'road', 8], [-176, -68, 5, 'dirt', 7], [-160, -75, 4.5, 'dirt', 7],                 // bush trail
-  [-131, -76, 4, 'creek', 7], [-112, -72, 4.5, 'dirt', 7], [-88, -67, 5.5, 'dirt', 7],
-  [-74, -66, 8, 'road', 7], [-58, -50, 12, 'road', 7], [-52, -38, 12.5, 'road', 7],                  // up the hill...
-  [-45, -24, 10, 'gap', 7], [-38, -9, 7, 'gap', 7],                                                    // ...jump over the rooftops
-  [-30, 5, 4.5, 'road', 7], [-19, 14, 1.5, 'sand', 7], [-4, 22, 0.5, 'sand', 7],                     // down to the beach + finish
+  [0, 0, 0.6, 'sand', 10], [9, -54, 0.6, 'sand', 10],
+  [36, -108, -1.5, 'under', 10], [90, -156, -5, 'under', 10], [123, -234, -6, 'under', 10], [141, -348, -6, 'under', 10], [111, -432, -2, 'under', 10],   // underwater along the coast
+  [93, -480, 2, 'rock', 8], [123, -525, 13, 'rock', 8], [135, -570, 24, 'rock', 8],                                          // boost up Lions Rock + the stairs
+  [138, -582, 25, 'gap', 8], [143, -600, 26, 'gap', 8],                                                                      // launch straight over the gap...
+  [147, -616, 28, 'cloud', 18], [158, -658, 32, 'cloud', 17], [171, -705, 36, 'cloud', 16], [135, -765, 44, 'cloud', 16],   // ...up into the clouds
+  [60, -800, 52, 'cloud', 16], [-30, -815, 58, 'cloud', 16], [-120, -860, 62, 'cloud', 16], [-190, -930, 64, 'cloud', 16],
+  [-280, -960, 64, 'cloud', 16], [-370, -1010, 62, 'cloud', 16], [-450, -1080, 60, 'cloud', 16], [-530, -1130, 55, 'cloud', 16],
+  [-610, -1190, 40, 'cloud', 15], [-680, -1250, 18, 'cloud', 14],                                                          // slide down to Noosa Heads
+  [-741, -1284, null, 'road', 10], [-825, -1212, null, 'road', 10], [-915, -1110, null, 'road', 10],                        // Noosa Heads: boosts + ramps
+  [-1008, -996, null, 'road', 10], [-1074, -990, null, 'road', 10], [-1080, -909, null, 'road', 10], [-1158, -807, null, 'road', 10],
+  [-1173, -640, null, 'road', 10], [-1170, -492, null, 'road', 10], [-978, -327, null, 'road', 10], [-885, -303, null, 'road', 11],
+  [-729, -312, null, 'road', 22],                                                                                            // Noosa Junction roundabout
+  [-615, -258, null, 'road', 11], [-528, -204, null, 'dirt', 10], [-480, -225, null, 'dirt', 10],                          // bush trail
+  [-393, -228, null, 'creek', 10], [-336, -216, null, 'dirt', 10], [-264, -201, null, 'dirt', 10],
+  [-222, -206, null, 'road', 10], [-185, -160, 16, 'road', 10], [-162, -122, 18, 'road', 10],                              // up the hill...
+  [-150, -100, 16, 'gap', 10], [-135, -72, 13, 'gap', 10],                                                                   // ...jump over the rooftops
+  [-120, -42, 8, 'road', 10], [-100, -2, 5, 'road', 10], [-81, 30, 3, 'road', 10], [-57, 40, 1.4, 'sand', 10], [-10, 70, 0.6, 'sand', 10],   // down to the beach + finish
 ];
 
 export class Track {
   constructor() {
-    const curve = new THREE.CatmullRomCurve3(CTRL.map(([x, z, y]) => new THREE.Vector3(x, y, z)), true, 'centripetal');
+    const curve = new THREE.CatmullRomCurve3(CTRL.map(([x, z, y]) => new THREE.Vector3(x, y ?? Math.max(1, natural(x, z) + 0.3), z)), true, 'centripetal');
     this.length = curve.getLength();
     const N = this.N = Math.round(this.length / 1.5);
     const pts = curve.getSpacedPoints(N);
@@ -94,23 +125,26 @@ export class Track {
     }
     const f = (x, z, len, h, halfW, lat = 0, kind = 'ramp') => this.feature(x, z, len, h, halfW, lat, kind);
     this.ramps = [
-      f(45, -190, 7, 2.6, 6, 0, 'launch'),                    // blue launch off Lions Rock
-      f(-290, -384, 8, 1.4, 3, -3), f(-322, -346, 8, 1.4, 3, 3),                     // Noosa Heads
-      f(-170, -71, 2.4, 0.55, 7, 0, 'log'), f(-150, -77, 2.4, 0.55, 7, 0, 'log'), f(-100, -70, 2.4, 0.55, 7, 0, 'log'),  // bush logs
-      f(-53, -40, 7, 1.6, 6, 0, 'launch'),                    // rooftop jump
+      f(135, -570, 8, 3, 8, 0, 'launch'),                     // blue launch off Lions Rock
+      f(-870, -1152, 9, 1.5, 3.5, -4), f(-966, -1040, 9, 1.5, 3.5, 4),                  // Noosa Heads
+      f(-510, -213, 2.4, 0.5, 10, 0, 'log'), f(-450, -231, 2.4, 0.5, 10, 0, 'log'), f(-300, -208, 2.4, 0.5, 10, 0, 'log'),  // bush logs
+      f(-168, -133, 8, 1.6, 8, 0, 'launch'),                  // rooftop jump
     ];
     this.boosts = [
-      f(33, -164, 5, 0, 2.5, -2), f(39, -174, 5, 0, 2.5, 2), f(43, -184, 4, 0, 2.5, 0),   // up the rock + stairs
-      f(-262, -417, 6, 0, 2.2, 2), f(-312, -358, 6, 0, 2.2, -2),                          // Noosa Heads
-      f(-250, -110, 6, 0, 2.2, 9), f(-232, -99, 6, 0, 2.2, 9),                            // roundabout: outside line
-      f(-375, -230, 6, 0, 2.2, 0),
+      f(99, -492, 6, 0, 3, -3), f(117, -515, 6, 0, 3, 3), f(129, -548, 5, 0, 3, 0),     // up the rock + stairs
+      f(-786, -1251, 7, 0, 2.5, 3), f(-936, -1080, 7, 0, 2.5, -3), f(-1170, -560, 7, 0, 2.5, 0),   // Noosa Heads
+      f(-760, -326, 7, 0, 2.5, 15), f(-700, -300, 7, 0, 2.5, 15),                         // roundabout: outside line
+      f(-560, -228, 7, 0, 2.5, 0),
     ];
-    this.ramps[0].vy = 13; this.ramps[6].vy = 9;           // launch ramps kick you up this fast (m/s)
-    this.island = { x: -243, z: -104, r: 6 };                // roundabout island (grass, slows you down)
-    this.surfClub = { x: -14, z: -16 };
+    // launch ramps kick you up (vy) and forward (vf) this fast, in m/s, so every speed class makes the jump
+    Object.assign(this.ramps[0], { vy: 16, vf: 34 }); Object.assign(this.ramps[6], { vy: 9, vf: 28 });
+    this.island = { x: -729, z: -312, r: 10 };               // roundabout island (grass, slows you down)
+    this.surfClub = { x: -40, z: -18 };
     this._n = { i: 0, lat: 0, d: 0 };
     this._g = { h: 0, surf: 'road', i: 0, lat: 0, boost: false, ramp: false };
   }
+  // where the barrier is, sideways from the centre line (none over the gaps you jump)
+  wall(i) { const s = this.surf[i]; return s === 'gap' ? 1e9 : this.w[i] + (s === 'cloud' ? 0.6 : 1.2); }
   feature(x, z, len, h, halfW, lat = 0, kind = 'ramp') {
     const i = this.nearestScan(x, z), r = this.r[i];
     return { i, p: new THREE.Vector2(this.p[i].x + r.x * lat, this.p[i].y + r.y * lat), t: this.t[i], r, len, h, halfW, lat, kind };
@@ -154,7 +188,7 @@ export class Track {
     out.ramp = false; out.launch = 0;
     for (const R of this.ramps) {
       const [ra, rl] = this.local(R, x, z);
-      if (ra > 0 && ra < R.len && Math.abs(rl) < R.halfW) { out.ramp = true; out.launch = R.vy || 0; h = this.th[R.i] + R.h * ra / R.len; }
+      if (ra > 0 && ra < R.len && Math.abs(rl) < R.halfW) { out.ramp = true; out.launch = R.vy || 0; out.launchV = R.vf || 0; h = this.th[n.i] + R.h * ra / R.len; }
     }
     out.boost = false;
     for (const b of this.boosts) { const [a, l] = this.local(b, x, z); if (a > 0 && a < b.len && Math.abs(l) < b.halfW) out.boost = true; }
@@ -249,7 +283,8 @@ export async function loadAssets(renderer, onProgress) {
     return t;
   }));
   const set = (names) => Promise.all([tex(names + '_diff.jpg', true), tex(names + '_nor.jpg'), tex(names + '_rough.jpg')]);
-  const [sand, wetsand, asphalt, bark, grass, waterNormals, sky, fern, shrub] = await Promise.all([
+  const [map, sand, wetsand, asphalt, bark, grass, waterNormals, sky, fern, shrub] = await Promise.all([
+    track(fetch('assets/noosa-map.json?v=8').then(r => r.json())),
     set('sand'), set('wetsand'), set('asphalt'),
     Promise.all([tex('bark_diff.jpg', true), tex('bark_nor.jpg')]),
     tex('grass_diff.jpg', true), tex('waternormals.jpg'),
@@ -258,6 +293,7 @@ export async function loadAssets(renderer, onProgress) {
     track(gl.loadAsync('assets/models/shrub_02/shrub_02.gltf')),
   ]);
   sky.mapping = THREE.EquirectangularReflectionMapping;
+  setMap(map);
   return { sand, wetsand, asphalt, bark, grass, waterNormals, sky, fern, shrub };
 }
 
@@ -291,7 +327,7 @@ export function buildWorld(scene, renderer, A, Q) {
   scene.environment = pmrem.fromEquirectangular(A.sky).texture;
   scene.background = A.sky;
   const { sun, fog } = readSky(A.sky);
-  scene.fog = new THREE.Fog(fog, 300, 1500);
+  scene.fog = new THREE.Fog(fog, 160, 750);             // also hides far-off chunks so the phone draws less
   const sunLight = new THREE.DirectionalLight(0xfff1dc, 2.6);
   sunLight.position.copy(sun).multiplyScalar(150);
   scene.add(sunLight, sunLight.target);
@@ -307,6 +343,9 @@ export function buildWorld(scene, renderer, A, Q) {
   buildTrackSurface(scene, track, A);
   const props = buildProps(scene, track);
   buildNoosaProps(scene, track);
+  buildCity(scene, track, A, Q);
+  buildGums(scene, track, Q);
+  buildBarriers(scene, track);
   buildPalms(scene, track, A, Q);
   buildPlants(scene, track, A, Q);
 
@@ -326,10 +365,10 @@ export function buildWorld(scene, renderer, A, Q) {
   };
 }
 let seaMat = null;
-const CX = -180, CZ = -200;                  // middle of the map (terrain + sea are centred here)
 
 function buildTerrain(track, A, Q) {
-  const W = 720, D = 640, sx = Math.round(160 * Q.seg), sz = Math.round(140 * Q.seg);
+  const M = mapInfo(), W = M.NX * M.C, D = M.NZ * M.C, CX = M.X0 + W / 2, CZ = M.Z0 + D / 2, res = Q.seg >= 1 ? 6 : Q.seg >= 0.8 ? 8 : 11;
+  const sx = Math.round(W / res), sz = Math.round(D / res), CO = M.codes;
   const geo = new THREE.PlaneGeometry(W, D, sx, sz);
   geo.rotateX(-Math.PI / 2); geo.translate(CX, 0, CZ);
   const pos = geo.attributes.position, n = pos.count;
@@ -347,9 +386,14 @@ function buildTerrain(track, A, Q) {
     if (!FLOATING[ts]) grass *= ss(tw + 1, tw + 9, near.d);  // keep the track edge sandy...
     if (ts === 'road' || ts === 'dirt' || ts === 'rock') grass = Math.max(grass, 0.9 * ss(tw + 7, tw + 4, near.d) * ss(tw + 0.5, tw + 2, near.d)); // ...except a grass verge
     mix[v * 2] = grass;
+    // real land cover: national park = dark bush floor, suburbs + parks = grass, beaches = sand, rock = sandstone
+    const c = coverAt(x, z);
+    if (c === CO.beach || dShore > -10) grass *= 0.0; else if (c === CO.rock) grass *= 0.15; else if (dShore < -35) grass = Math.max(grass, ss(-35, -60, dShore));
+    mix[v * 2] = grass;
     mix[v * 2 + 1] = ss(-9, 0.5, dShore);                       // wet sand near and under the water
     const b = 0.88 + 0.18 * fbm(x * 0.03, z * 0.03, 3);        // big soft light/dark patches so tiling doesn't show
-    col[v * 3] = b; col[v * 3 + 1] = b; col[v * 3 + 2] = b * 0.98;
+    const t = c === CO.forest ? [0.62, 0.72, 0.5] : c === CO.rock ? [0.85, 0.72, 0.58] : c === CO.grass ? [0.95, 1.05, 0.85] : [1, 1, 0.97];
+    col[v * 3] = b * t[0]; col[v * 3 + 1] = b * t[1]; col[v * 3 + 2] = b * t[2];
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('mixes', new THREE.BufferAttribute(mix, 2));
@@ -430,7 +474,8 @@ function buildSea(track, A, sun) {
       }`,
   });
   const g = new THREE.Group();
-  const geo = new THREE.PlaneGeometry(720, 640, 120, 106); geo.rotateX(-Math.PI / 2); geo.translate(CX, 0, CZ);
+  const M = mapInfo(), W = M.NX * M.C, D = M.NZ * M.C;
+  const geo = new THREE.PlaneGeometry(W, D, Math.round(W / 12), Math.round(D / 12)); geo.rotateX(-Math.PI / 2); geo.translate(M.X0 + W / 2, 0, M.Z0 + D / 2);
   const pos = geo.attributes.position, depth = new Float32Array(pos.count), nb = { i: 0, lat: 0, d: 0 };
   for (let v = 0; v < pos.count; v++) {
     const x = pos.getX(v), z = pos.getZ(v);
@@ -461,11 +506,12 @@ function buildTrackSurface(scene, track, A) {
   const sandRoad = soft(0xb9a68c), dirt = soft(0x7d5a3a);
   const seabed = off(std({ map: wm, normalMap: wn, roughnessMap: wr, color: 0xe2d2a8 }), 2);
   const cloudT = canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = '#eef3fa'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#d3def0'; g.fillRect(0, 0, w, h);
     for (let k = 0; k < 40; k++) { const x = rand() * w, y = rand() * h, r = 8 + rand() * 22, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r); }
   });
+  { const g = cloudT.image.getContext('2d'); g.fillStyle = '#ffcf40'; g.fillRect(60, 8, 8, 52); cloudT.needsUpdate = true; }   // gold dashed centre line
   cloudT.wrapS = cloudT.wrapT = THREE.RepeatWrapping;
-  const cloud = std({ map: cloudT, roughness: 1, emissive: 0x9fb4cc, emissiveIntensity: 0.15 });
+  const cloud = std({ map: cloudT, color: 0xa9b6ca, roughness: 1 });     // darker than the puffs so the road reads
   const creek = off(std({ color: 0x3f93b5, roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.82 }), 3);
   const white = off(std({ color: 0xf0f0ee, roughness: 0.6 }), 4);
   const kerbT = stripeTex('#d42a1e', '#f4f4f4'); kerbT.wrapT = THREE.RepeatWrapping;
@@ -501,14 +547,14 @@ function buildProps(scene, track) {
   track.place(line, 0, 0, track.th[0] + 0.015); line.receiveShadow = true; scene.add(line);
   const gantry = track.place(new THREE.Group(), 0);
   const pillarM = std({ color: 0x1f6fb2, roughness: 0.4, metalness: 0.3 });
-  for (const s of [-1, 1]) gantry.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.7, 6.4, 0.7), pillarM).translateX(s * (HALF_W + 0.9)).translateY(3.2)));
+  for (const s of [-1, 1]) gantry.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.7, 6.4, 0.7), pillarM).translateX(s * (track.w[0] + 1.6)).translateY(3.2)));
   const banner = canvasTex(1024, 128, (g, w, h) => {
     g.fillStyle = '#ffd23f'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 64; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#111' : '#fff'; g.fillRect(i * 16, j * 16, 16, 16); g.fillRect(i * 16, h - 32 + j * 16, 16, 16); }
     g.fillStyle = '#e8532a'; g.font = '900 62px Trebuchet MS, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('POSTCARD RACERS  •  NOOSA', w / 2, h / 2 + 2);
   });
-  gantry.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_W + 2.5, 1.5, 0.35), [pillarM, pillarM, pillarM, pillarM, std({ map: banner, roughness: 0.5 }), std({ map: banner, roughness: 0.5 })]).translateY(5.9)));
+  gantry.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(2 * track.w[0] + 3.9, 1.5, 0.35), [pillarM, pillarM, pillarM, pillarM, std({ map: banner, roughness: 0.5 }), std({ map: banner, roughness: 0.5 })]).translateY(5.9)));
   scene.add(gantry);
 
   // boost pads: glowing chevrons that flow forward
@@ -542,6 +588,7 @@ function buildProps(scene, track) {
   rg.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(ruv, 2));
   rg.computeVertexNormals();
   const rm = shadowed(track.place(new THREE.Mesh(rg, R.kind === 'log' ? moundM : plankM), R.i, R.lat));
+  rm.rotation.order = 'YXZ'; rm.rotation.x = Math.atan2(track.th[(R.i + Math.round(R.len / track.ds)) % track.N] - track.th[R.i], R.len);   // follow the slope
   if (R.kind === 'log') rm.add(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 2 * w + 1, 10).rotateZ(Math.PI / 2), logM)).translateY(H - 0.1).translateZ(-L));
   scene.add(rm);
   }
@@ -577,7 +624,6 @@ function buildProps(scene, track) {
       const i = (pk + k + track.N) % track.N;
       const sign = track.place(new THREE.Group(), i, (left ? 1 : -1) * (track.w[i] + 3.5), 0);
       sign.position.y = gh(track, sign.position.x, sign.position.z);
-      sign.rotateY(Math.PI);                                   // face the oncoming karts
       const b = shadowed(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), boardM)); b.position.y = 1.6;
       if (!left) b.scale.x = -1;                                // arrows point into the turn
       b.material.side = THREE.DoubleSide;
@@ -612,7 +658,7 @@ function buildProps(scene, track) {
   const poleM = std({ color: 0xeeeeee, roughness: 0.4 });
   let placed = 0;
   for (let tries = 0; tries < 400 && placed < 14; tries++) {
-    const z = rr(-130, 40), x = eastShore(z) - rr(5, 12);
+    const z = rr(-140, 60), x = shoreAt(z) - rr(5, 14);
     const n = track.nearest(x, z);
     if (n.d < track.w[n.i] + 4) continue;
     const y = gh(track, x, z);
@@ -626,7 +672,7 @@ function buildProps(scene, track) {
   const flagT = canvasTex(64, 64, (g) => { g.fillStyle = '#d6201f'; g.fillRect(0, 0, 64, 32); g.fillStyle = '#ffd200'; g.fillRect(0, 32, 64, 32); });
   const flags = [];
   for (const z of [-22, 24]) {
-    const x = eastShore(z) - 3, f = new THREE.Group(); f.position.set(x, gh(track, x, z), z);
+    const x = shoreAt(z) - 3, f = new THREE.Group(); f.position.set(x, gh(track, x, z), z);
     f.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 3, 6), poleM).translateY(1.5));
     const cloth = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.7).translate(0.5, 0, 0), std({ map: flagT, side: THREE.DoubleSide, roughness: 0.8 }));
     cloth.position.y = 2.6; f.add(cloth); flags.push(cloth); scene.add(f);
@@ -753,8 +799,9 @@ function buildNoosaProps(scene, track) {
   const puff = (pos, s, flat = 0.55) => puffs.push(new THREE.Matrix4().compose(pos, q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rr(0, 6.3)), sc.set(s, s * flat, s)));
   for (let i = 0; i < track.N; i++) {
     if (track.surf[i] !== 'cloud') continue;
-    if (i % 3 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(0, 1.2)), track.th[i] - rr(0.2, 0.6)), rr(1.4, 2.6));
-    if (i % 5 === 0) puff(spot(i, rr(-track.w[i], track.w[i]), track.th[i] - rr(1.6, 3.2)), rr(3, 5), 0.5);
+    if (i % 3 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(0.5, 2.5)), track.th[i] - rr(0.3, 1)), rr(2, 3.6));
+    if (i % 3 === 0) { const r = rr(5, 9); puff(spot(i, rr(-track.w[i], track.w[i]), track.th[i] - 1.2 - r * 0.5 - rr(0, 2)), r, 0.5); }   // keep their tops under the road
+    if (i % 7 === 0) for (const s of [-1, 1]) puff(spot(i, s * (track.w[i] + rr(8, 30)), track.th[i] + rr(-6, 4)), rr(6, 12), 0.6);
   }
   instanced(new THREE.IcosahedronGeometry(1, 2), std({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2 }), puffs, false);
 
@@ -805,8 +852,8 @@ function buildNoosaProps(scene, track) {
   };
   for (let i = 0; i < track.N; i++) {
     const s = track.surf[i];
-    if (s === 'gap' && track.th[i] < 13 && i % 7 === 0) for (const lat of [-6, 1, 8]) { const p = spot(i, lat + rr(-1, 1), 0); house(p.x, p.z, Math.atan2(-track.t[i].x, -track.t[i].y) + rr(-0.2, 0.2)); }
-    if (s === 'road' && track.th[i] > 6 && track.th[i] < 13 && i % 12 === 0) for (const side of [-1, 1]) { const p = spot(i, side * (track.w[i] + rr(10, 16)), 0); house(p.x, p.z, rr(0, 6.3)); }
+    if (s === 'gap' && i > track.N / 2 && i % 5 === 0) for (const lat of [-6, 1, 8]) { const p = spot(i, lat + rr(-1, 1), 0); house(p.x, p.z, Math.atan2(-track.t[i].x, -track.t[i].y) + rr(-0.2, 0.2)); }
+    if (s === 'road' && i > track.N * 0.93 && i % 12 === 0) for (const side of [-1, 1]) { const p = spot(i, side * (track.w[i] + rr(10, 16)), 0); house(p.x, p.z, rr(0, 6.3)); }
   }
 
   // sandstone boulders around Lions Rock
@@ -816,4 +863,166 @@ function buildNoosaProps(scene, track) {
     rocks.push(new THREE.Matrix4().compose(p, q.setFromEuler(new THREE.Euler(rr(0, 3), rr(0, 3), rr(0, 3))), sc.set(k, k * 0.7, k)));
   }
   instanced(new THREE.DodecahedronGeometry(1, 0), std({ color: 0xa8875f, roughness: 0.95, flatShading: true }), rocks);
+}
+
+// ---------- real Noosa from OpenStreetMap: streets, buildings, houses along the streets ----------
+// Everything is merged into ~300 m chunks so the phone only draws the chunks in front of you.
+function chunked(scene, mat, parts) {
+  const byChunk = new Map();
+  for (const { geo, x, z } of parts) { const k = Math.floor(x / 300) + ',' + Math.floor(z / 300); if (!byChunk.has(k)) byChunk.set(k, []); byChunk.get(k).push(geo); }
+  for (const list of byChunk.values()) { const m = new THREE.Mesh(mergeGeometries(list), mat); m.castShadow = m.receiveShadow = true; scene.add(m); }
+}
+function paint(geo, c) {
+  const n = geo.attributes.position.count, a = new Float32Array(n * 3);
+  for (let k = 0; k < n; k++) { a[k * 3] = c.r; a[k * 3 + 1] = c.g; a[k * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  if (geo.index) return geo.toNonIndexed();
+  return geo;
+}
+function buildCity(scene, track, A, Q) {
+  const M = mapInfo(), nb = { i: 0, lat: 0, d: 0 };
+  const nearTrackEdge = (x, z, extra) => { const n = track.nearest(x, z, false, nb); return n.i >= 0 && !FLOATING[track.surf[n.i]] && n.d < track.w[n.i] + extra; };
+  // --- streets: asphalt ribbons laid on the ground, broken where they meet the race track ---
+  const roadParts = [];
+  for (const r of M.roads) {
+    const hw = r.w * 0.7, pts = [];
+    for (let k = 0; k + 3 < r.p.length; k += 2) {
+      const x0 = r.p[k], z0 = r.p[k + 1], x1 = r.p[k + 2], z1 = r.p[k + 3], L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(L / 5));
+      for (let s = k ? 1 : 0; s <= n; s++) pts.push([x0 + (x1 - x0) * s / n, z0 + (z1 - z0) * s / n]);
+    }
+    let run = [];
+    const flush = () => {
+      if (run.length > 1) {
+        const pos = [], uv = [], ind = []; let v = 0;
+        run.forEach(([x, z], k) => {
+          const [xa, za] = run[Math.max(0, k - 1)], [xb, zb] = run[Math.min(run.length - 1, k + 1)];
+          let dx = xb - xa, dz = zb - za; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+          if (k) v += Math.hypot(x - run[k - 1][0], z - run[k - 1][1]) / 8;
+          for (const s of [-1, 1]) { const px = x - dz * hw * s, pz = z + dx * hw * s; pos.push(px, gh(track, px, pz) + 0.07, pz); uv.push(s < 0 ? 0 : 1, v); }
+          if (k) { const q = (k - 1) * 2; ind.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+        });
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ind); g.computeVertexNormals();
+        roadParts.push({ geo: g, x: run[0][0], z: run[0][1] });
+      }
+      run = [];
+    };
+    for (const p of pts) { if (nearTrackEdge(p[0], p[1], 2.5) || seaDist(p[0], p[1]) > -1) flush(); else run.push(p); }
+    flush();
+  }
+  const [am, an] = A.asphalt;
+  const streetM = new THREE.MeshStandardMaterial({ map: am, normalMap: an, color: 0xb8b8b8, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  if (roadParts.length) chunked(scene, streetM, roadParts.map(p => ({ ...p })));
+
+  // --- buildings from the map (mostly Hastings Street + Noosa Junction shops) ---
+  const col = new THREE.Color(), parts = [];
+  const shopCols = [0xf4e3c1, 0xe8f1f2, 0xf6d3c4, 0xd9ead3, 0xfdf3e7, 0xcfe3ef], houseCols = [0xf4efe4, 0xdfe9ef, 0xf6e3c8, 0xe6efe0, 0xf0d9d4, 0xece4d8];
+  for (const b of M.buildings) {
+    const pts = []; for (let k = 0; k + 1 < b.p.length; k += 2) pts.push(new THREE.Vector2(b.p[k], -b.p[k + 1]));
+    if (pts.length < 3) continue;
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cz = -pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    if (nearTrackEdge(cx, cz, 4)) continue;
+    const base = Math.min(...pts.map(p => gh(track, p.x, -p.y))) - 0.4, h = Math.max(3, b.h);
+    const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: h + 0.4, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, base, 0);
+    const shop = /commercial|retail|apartments|hotel/.test(b.k);
+    parts.push({ geo: paint(geo, col.setHex((shop ? shopCols : houseCols)[Math.floor(rand() * 6)])), x: cx, z: cz });
+  }
+  // --- houses along the suburban streets (most Noosa houses aren't drawn on the map, but the streets are) ---
+  const taken = new Set(), key = (x, z) => Math.floor(x / 9) + ',' + Math.floor(z / 9);
+  for (const b of M.buildings) for (let k = 0; k + 1 < b.p.length; k += 2) taken.add(key(b.p[k], b.p[k + 1]));
+  const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), roof = new THREE.ConeGeometry(0.71, 1, 4, 1).rotateY(Math.PI / 4).translate(0, 0.5, 0);
+  const roofCols = [0x8c3b2e, 0x3d5a73, 0x55606b, 0x9a9590, 0x6f3d2c];
+  const C = M.codes, ok = c => c === 0 || c === C.residential || c === C.commercial;
+  const maxD = Q.seg >= 0.8 ? 320 : 200, mt = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3();
+  let houses = 0;
+  for (const r of M.roads) {
+    if (r.w > 4.6 || r.w < 3) continue;                                  // residential + unclassified streets only
+    for (let k = 0; k + 3 < r.p.length; k += 2) {
+      const x0 = r.p[k], z0 = r.p[k + 1], x1 = r.p[k + 2], z1 = r.p[k + 3], L = Math.hypot(x1 - x0, z1 - z0);
+      if (L < 6) continue;
+      const dx = (x1 - x0) / L, dz = (z1 - z0) / L, rot = Math.atan2(dx, dz);
+      for (let s = 4; s < L - 3; s += 11) for (const side of [-1, 1]) {
+        const x = x0 + dx * s - dz * side * 8.5, z = z0 + dz * s + dx * side * 8.5;
+        const n = track.nearest(x, z, false, nb);
+        if (n.i < 0 && track.nearest(x, z, true, nb).d > maxD) continue;
+        if (!ok(coverAt(x, z)) || seaDist(x, z) > -14 || nearTrackEdge(x, z, 7) || taken.has(key(x, z))) continue;
+        taken.add(key(x, z));
+        const W = rr(5.5, 7.5), D = rr(6.5, 8.5), H = rr(2.8, 3.8), y = gh(track, x, z) - 0.3;
+        q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot);
+        mt.compose(v.set(x, y, z), q, sc.set(W, H + 0.3, D));
+        parts.push({ geo: paint(box.clone().applyMatrix4(mt), col.setHex(houseCols[Math.floor(rand() * 6)])), x, z });
+        mt.compose(v.set(x, y + H + 0.3, z), q, sc.set(W * 1.12, rr(1.4, 2.2), D * 1.12));
+        parts.push({ geo: paint(roof.clone().applyMatrix4(mt), col.setHex(roofCols[Math.floor(rand() * 5)])), x, z });
+        houses++;
+      }
+    }
+  }
+  chunked(scene, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), parts);
+  return houses;
+}
+
+// ---------- eucalyptus trees: pale trunk + grey-green clumps, instanced ----------
+function buildGums(scene, track, Q) {
+  const M = mapInfo(), C = M.codes, list = [];
+  const trunk = paint(new THREE.CylinderGeometry(0.22, 0.38, 7, 6).translate(0, 3.5, 0), new THREE.Color(0xd8d2c4));
+  const clumps = [[0, 7.6, 0, 2.6], [1.4, 6.6, 0.8, 2], [-1.2, 8.4, -0.6, 1.9]].map(([x, y, z, r]) => paint(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.75, 1).translate(x, y, z), new THREE.Color(0x6f8a5a)));
+  const geo = mergeGeometries([trunk, ...clumps]);
+  const count = Q.seg >= 1 ? 1400 : Q.seg >= 0.8 ? 900 : 450;
+  for (let tries = 0; list.length < count && tries < count * 25; tries++) {
+    const i = Math.floor(rand() * track.N), s = track.surf[i];
+    if (s === 'under') continue;
+    const far = s === 'cloud' ? rr(0, 260) : rr(4, 150);              // under the cloud road: the national park below
+    const lat = (rand() < 0.5 ? -1 : 1) * (track.w[i] + far), p = track.p[i], r = track.r[i];
+    const x = p.x + r.x * lat, z = p.y + r.y * lat, c = coverAt(x, z);
+    const n = track.nearest(x, z, false, { i: 0, lat: 0, d: 0 });
+    if (n.i >= 0 && !FLOATING[track.surf[n.i]] && n.d < track.w[n.i] + 5) continue;
+    if (seaDist(x, z) > -12 || c === C.road || c === C.water || c === C.beach) continue;
+    if (c !== C.forest && rand() < 0.7) continue;                      // forest = dense; suburbs = the odd gum tree
+    list.push([x, gh(track, x, z) - 0.2, z]);
+  }
+  const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), list.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3(), col = new THREE.Color();
+  list.forEach(([x, y, z], k) => {
+    const s = rr(0.8, 1.6);
+    m.compose(v.set(x, y, z), q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rr(0, 6.3)), sc.set(s, s * rr(0.9, 1.25), s));
+    im.setMatrixAt(k, m); im.setColorAt(k, col.setHSL(rr(0.2, 0.28), rr(0.15, 0.35), rr(0.75, 1.05)));
+  });
+  im.castShadow = !!Q.shadow; im.receiveShadow = true;
+  scene.add(im);
+}
+
+// ---------- barriers along both edges, like Mario Kart (the kart bounces off them) ----------
+function buildBarriers(scene, track) {
+  const vstrip = (idx, lat, h, vScale) => {
+    const pos = [], uv = [], ind = []; let u = 0;
+    idx.forEach((i, k) => {
+      if (k) u += track.p[i].distanceTo(track.p[idx[k - 1]]) / vScale;
+      const p = track.p[i], r = track.r[i], L = lat(i), x = p.x + r.x * L, z = p.y + r.y * L, y = track.th[i];
+      pos.push(x, y - 0.3, z, x, y + h, z); uv.push(u, 0, u, 1);
+      if (k) { const a = (k - 1) * 2; ind.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ind); g.computeVertexNormals();
+    return g;
+  };
+  const tex = (a, b) => { const t = stripeTex(a, b, 2); t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.repeat.set(1, 1); return t; };
+  const woodT = canvasTex(256, 64, (g, w, h) => { for (let y = 0; y < h; y += 16) { const s = 120 + rand() * 40; g.fillStyle = `rgb(${s},${s * 0.66 | 0},${s * 0.4 | 0})`; g.fillRect(0, y, w, 14); g.fillStyle = '#3b2616'; g.fillRect(0, y + 14, w, 2); } });
+  woodT.wrapS = THREE.RepeatWrapping;
+  const kinds = {
+    road: [0.9, new THREE.MeshStandardMaterial({ map: tex('#d42a1e', '#f4f4f4'), roughness: 0.5, side: THREE.DoubleSide })],
+    rock: [1.0, new THREE.MeshStandardMaterial({ color: 0xa8875f, roughness: 0.95, side: THREE.DoubleSide })],
+    sand: [0.8, new THREE.MeshStandardMaterial({ map: tex('#1b6fb2', '#f4f4f4'), roughness: 0.5, side: THREE.DoubleSide })],
+    dirt: [0.9, new THREE.MeshStandardMaterial({ map: woodT, roughness: 0.9, side: THREE.DoubleSide })],
+    under: [1.4, new THREE.MeshStandardMaterial({ color: 0x4f6d63, roughness: 0.9, side: THREE.DoubleSide })],
+    cloud: [1.0, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, emissive: 0xa8bbd2, emissiveIntensity: 0.2, transparent: true, opacity: 0.85, side: THREE.DoubleSide })],
+  };
+  kinds.creek = kinds.dirt;
+  for (const [k, [h, mat]] of Object.entries(kinds)) {
+    const geos = [];
+    for (const run of track.runs(i => track.surf[i] === k || (k === 'dirt' && track.surf[i] === 'creek')))
+      for (const s of [-1, 1]) geos.push(vstrip(run, i => s * (track.wall(i) - 0.1), h, k === 'road' ? 2 : 3));
+    if (k === 'creek' || !geos.length) continue;
+    const m = new THREE.Mesh(mergeGeometries(geos), mat); m.castShadow = k !== 'cloud'; m.receiveShadow = true; scene.add(m);
+  }
 }
