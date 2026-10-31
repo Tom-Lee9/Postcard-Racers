@@ -16,6 +16,7 @@ A short test track for the VR kart racer. It checks three things before we build
 |---|---|---|---|
 | Go | ZR / R / A | GO button | W / ↑ |
 | Brake / reverse | ZL / L / B | BRAKE button | S / ↓ |
+| Hop / drift (hold) | button 2 (check which) | DRIFT button | Space / Shift |
 | Steer | stick | ◀ ▶ buttons | A / D |
 | Switch camera | X/Y (top face button) | Settings | C |
 | Re-centre view (VR) | + | two-finger tap | |
@@ -23,13 +24,23 @@ A short test track for the VR kart racer. It checks three things before we build
 
 ## micro:bit steering wheel
 1. In MakeCode, start a new project, add the **bluetooth** extension and set **Project Settings → No Pairing Required**.
-2. Open the JavaScript tab, paste in `microbit-wheel.txt`, and download it to the micro:bit. It shows an **X** until it connects.
+2. Open the JavaScript tab, paste in `microbit-wheel.txt`, and download it to the micro:bit. It shows an **X** until it connects. (If you had the old wheel program, download the new one: the buttons changed.)
 3. Open the game in **Bluefy** and tap **Connect micro:bit wheel**. Pick your micro:bit (it may show up as a 5-letter name). Hold it straight while it connects.
 4. Hold it upright like a steering wheel: screen facing you, logo at the top. The menu shows how far it's turned.
-5. Press **A** on the micro:bit to reset "straight" any time.
+5. **A = go, B = brake, touch the gold logo = hop and drift.** Flick it upwards while flying off a jump to do a trick.
+6. Press **A and B together, twice quickly** to reset "straight" any time. Holding A and tapping B (brake-drifting) won't set it off.
 - Steers the wrong way? Settings → **Reverse micro:bit steering**.
 - Too twitchy or too slow? Settings → **micro:bit full lock** (how far you turn it for full steering).
-- The Joy-Cons still do go and brake. While the micro:bit is connected, it does the steering instead of the stick.
+- The Joy-Cons still work too. While the micro:bit is connected, it does the steering instead of the stick.
+
+## Drifting
+- **Start:** tap drift to hop, then steer left or right as you land and keep holding. The kart swings its nose into the corner.
+- **Change the line:** while drifting, steer *into* the corner for a tight arc, or *out* for a wide one.
+- **Sparks:** blue → orange → purple. Steering into the corner (at least halfway) charges them about 2.5x faster: roughly 0.9 s, 1.9 s and 2.9 s. Steering out takes more than twice as long.
+- **Boost:** let go of drift. Blue = short boost (0.6 s), orange = big (1.7 s), purple = giant (2.6 s). The HUD shows three pips too, because the back-wheel sparks are hard to see from the cockpit.
+- **Brake-drifting:** tap brake during a drift to tighten up without losing it. Drop below about 17 km/h and the drift ends with no boost.
+- **Tricks:** flick the micro:bit up (or press drift) while flying off the ramp. Land it for a short yellow boost.
+- Timing is based on Mario Kart's published charge rates, as a starting point to tune.
 
 **VR without a controller:** hold a finger on the screen to go and tilt your head like a steering wheel. You can turn head-tilt steering off in Settings.
 
@@ -40,7 +51,7 @@ In this folder, run:
 ```
 npx http-server -p 8080 -c-1
 ```
-Then open http://localhost:8080.
+Then open http://localhost:8080. Test switches: `?cam=chase`, `?at=<spot>`, `?auto=1` (drives itself), `?mb=<degrees>` (fake micro:bit), `?spark=1..3` (show drift sparks).
 
 ## Run it on the iPhone (needs https)
 1. Make a new GitHub repo called `postcard-racers` and upload everything in this folder (`index.html`, `README.md`, `js/`, `lib/`, `assets/`).

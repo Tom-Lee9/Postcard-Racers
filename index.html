@@ -32,6 +32,7 @@
   #exit { left: calc(50% - 110px); } #mute { left: calc(50% + 20px); }
   .pad { bottom: 22px; width: 86px; height: 86px; border-radius: 50% !important; font-size: 26px !important; background: rgba(255,255,255,.28); }
   #left { left: 22px; } #right { left: 120px; } #gas { right: 22px; background: rgba(40,200,90,.6); } #brake { right: 120px; background: rgba(220,60,40,.55); font-size: 15px !important; }
+  #drift { right: 22px; bottom: 120px !important; background: rgba(120,80,230,.6); font-size: 15px !important; }
   body.vr .pad, body.vr #exit, body.vr #mute { opacity: .35; }
   body.vr .pad { display: none; }
   #fps { position: absolute; top: 10px; left: 10px; color: #fff; font: 12px monospace; text-shadow: 0 0 3px #000; }
@@ -97,6 +98,7 @@
     <button id="right" class="pad">▶</button>
     <button id="brake" class="pad">BRAKE</button>
     <button id="gas" class="pad">GO</button>
+    <button id="drift" class="pad">DRIFT</button>
     <div id="fps"></div>
   </div>
   <div id="divider"></div>

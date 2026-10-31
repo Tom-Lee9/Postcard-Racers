@@ -3,15 +3,27 @@
 // Needs: the "bluetooth" extension, and Project Settings -> "No Pairing Required".
 // Play the game in Bluefy and tap "Connect micro:bit wheel".
 //
-// micro:bit -> game: "s<angle>" about 25 times a second (degrees turned, + = right)
+//   A = go, B = brake, touch the gold logo = hop / hold to drift
+//   Flick it upwards while flying off a jump = trick
+//   Press A and B together, twice quickly = straighten up (whatever angle you're holding becomes "straight")
+//
+// micro:bit -> game: "s<angle>,<buttons>" about 25 times a second (angle + = right; buttons 1 = A, 2 = B, 4 = logo)
+//                    "t" = flick, "z" = straightened
 // game -> micro:bit: "go" (race started), "l<lap>" (new lap), "fin" (finished)
-// Button A: straighten up (whatever angle you're holding now becomes "straight")
 
 bluetooth.startUartService()
 basic.showIcon(IconNames.No, 0)       // X = not connected yet
 
 let connected = false
 let zero = 0
+let aDown = false
+let bDown = false
+let aTime = 0
+let bTime = 0
+let lastTogether = -10000
+let lastFlick = -10000
+let lastSend = 0
+let lastBits = -1
 
 // Which way gravity pulls across the screen tells us how far the wheel is turned
 function rawAngle(): number {
@@ -26,11 +38,11 @@ function wheelAngle(): number {
     while (a < -180) a += 360
     return a
 }
-
-input.onButtonPressed(Button.A, function () {
+function straighten() {
     zero = rawAngle()
     basic.showIcon(IconNames.Yes, 0)
-})
+    if (connected) bluetooth.uartWriteString("z\n")
+}
 
 bluetooth.onBluetoothConnected(function () {
     connected = true
@@ -49,6 +61,39 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
 })
 
 basic.forever(function () {
-    if (connected) bluetooth.uartWriteString("s" + Math.round(wheelAngle()) + "\n")
-    basic.pause(40)
+    let now = input.runningTime()
+    let a = input.buttonIsPressed(Button.A)
+    let b = input.buttonIsPressed(Button.B)
+    if (a && !aDown) aTime = now
+    if (b && !bDown) bTime = now
+    // Straighten = A and B go down at the SAME moment, twice within 0.8 s.
+    // Holding A (go) and tapping B (brake-drifting) doesn't count, because A went down ages before B.
+    if (a && b && (!aDown || !bDown) && Math.abs(aTime - bTime) < 150) {
+        if (now - lastTogether < 800) {
+            straighten()
+            lastTogether = -10000
+        } else {
+            lastTogether = now
+        }
+    }
+    aDown = a
+    bDown = b
+
+    // a sharp flick (more than about 2x gravity) = trick. The game only uses it while you're in the air.
+    if (connected && input.acceleration(Dimension.Strength) > 2000 && now - lastFlick > 500) {
+        lastFlick = now
+        bluetooth.uartWriteString("t\n")
+    }
+
+    let bits = 0
+    if (a) bits += 1
+    if (b) bits += 2
+    if (input.logoIsPressed()) bits += 4
+    // send straight away when a button changes, otherwise every 40 ms
+    if (connected && (bits != lastBits || now - lastSend >= 40)) {
+        bluetooth.uartWriteString("s" + Math.round(wheelAngle()) + "," + bits + "\n")
+        lastSend = now
+        lastBits = bits
+    }
+    basic.pause(10)
 })
